@@ -1,0 +1,35 @@
+# Compiled class file storage
+target/
+
+# Logs
+*.log
+logs/
+
+# Maven generated files
+*.jar
+*.war
+*.ear
+
+# Package Files #
+*.pkg
+*.deb
+*.dmg
+*.rpm
+*.msi
+*.exe
+
+# IDE specific files (IntelliJ Example)
+.idea/
+*.iml
+*~
+*.swp
+
+# Mac System Files
+.DS_Store
+
+# Windows thumbnail cache files
+Thumbs.db
+
+# Java VM crash logs
+hs_err_pid*
+replay_pid*
