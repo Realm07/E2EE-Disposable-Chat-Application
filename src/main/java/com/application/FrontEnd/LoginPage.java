@@ -1,112 +1,153 @@
-import components.CustomButton;
-import components.CustomTextField;
-import components.CustomLabel;
+package com.application.FrontEnd;
 
-import javax.swing.*;
-import java.awt.*;
+// Assuming Backend classes are in this package now
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridLayout;
+import java.awt.Image;
 import java.awt.MultipleGradientPaint.CycleMethod;
+import java.awt.RadialGradientPaint;
+import java.awt.RenderingHints;
+import java.awt.event.ActionListener;
 import java.awt.geom.Point2D;
 
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPasswordField;
+import javax.swing.SwingConstants;
 
+import com.application.Backend.ChatController;
+import com.application.FrontEnd.components.CustomButton;
+import com.application.FrontEnd.components.CustomLabel;
+import com.application.FrontEnd.components.CustomTextField;
 
-class LoginPage extends JPanel {
+public class LoginPage extends JPanel {
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////
     private CustomButton createButton;
     private CustomButton joinButton;
-    private CustomTextField userName;
-    private CustomTextField roomName;
-    private CustomTextField password;
+    private CustomTextField userNameField;
+    private CustomTextField roomNameField;
+    private JPasswordField passwordField;
 
     private String tempRoomName = "Room123";
     private String tempPassword = "Room123";
 
     private MainFrame mainFrame;
-
-    public LoginPage(MainFrame mainFrame) {
+    private ChatController chatController;
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public LoginPage(MainFrame mainFrame, ChatController chatController) {
         this.mainFrame = mainFrame;
+        this.chatController = chatController;
 
         this.setLayout(new GridLayout(1, 2));
         // this.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         JPanel imagePanel = new JPanel(new BorderLayout());
 
-        java.net.URL imageURL = getClass().getResource("/images/Login_img.png");
-        ImageIcon imageIcon = new ImageIcon(imageURL);
-        Image scaledImage = imageIcon.getImage().getScaledInstance(300, 350, Image.SCALE_SMOOTH);
-        JLabel imageLabel = new JLabel(new ImageIcon(scaledImage));
-        imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        imagePanel.add(imageLabel, BorderLayout.CENTER);
-        imagePanel.setBackground(Color.BLACK);
+        try {
+            System.out.println("Attempting to load login image...");
+            java.net.URL imgUrl = getClass().getResource("/com/application/FrontEnd/images/Login_img.png");
+
+            if (imgUrl != null) {
+                System.out.println("Image URL found: " + imgUrl.toString());
+
+                ImageIcon imageIcon = new ImageIcon(imgUrl);
+                System.out.println("ImageIcon created successfully.");
+
+                Image scaledImage = imageIcon.getImage().getScaledInstance(300, -1, Image.SCALE_SMOOTH);
+                System.out.println("Image scaled successfully.");
+
+                JLabel imageLabel = new JLabel(new ImageIcon(scaledImage));
+                imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+                imagePanel.add(imageLabel, BorderLayout.CENTER);
+                System.out.println("Image label added to panel.");
+            } else {
+                System.err.println("Error: Login image not found in classpath: /com/application/FrontEnd/images/Login_img.png");
+                imagePanel.add(new JLabel("Image Not Found"), BorderLayout.CENTER); // Placeholder
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading login image: " + e.getMessage());
+            e.printStackTrace(); // Stack trace for debugging
+            imagePanel.add(new JLabel("Image Load Failed"), BorderLayout.CENTER); // Placeholder
+        }
+
+        imagePanel.setBackground(new Color(64, 64, 64, 250));
+
 
         //Mane panel
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
+        formPanel.setOpaque(false);
 
         //User name
         CustomLabel labelUserName = new CustomLabel("User Name", 100, 30);
-        labelUserName.setAlignmentX(Component.CENTER_ALIGNMENT);
-        labelUserName.setForeground(new Color(255,255,255));
-        userName = new CustomTextField(300, 30);
-        userName.setForeground(Color.BLACK);
+        labelUserName.setForeground(Color.WHITE);
+        userNameField = new CustomTextField(300, 30);
 
         //Room name
         CustomLabel labelRoomName = new CustomLabel("Room Name", 100, 30);
-        labelRoomName.setAlignmentX(Component.CENTER_ALIGNMENT);
-        labelRoomName.setForeground(new Color(255,255,255));
-        roomName = new CustomTextField(300, 30);
-        roomName.setForeground(Color.BLACK);
+        labelRoomName.setForeground(Color.WHITE);
+        roomNameField = new CustomTextField(300, 30);
 
         //Password
         CustomLabel labelPassword = new CustomLabel("Password", 100, 30);
-        labelPassword.setAlignmentX(Component.CENTER_ALIGNMENT);
-        labelPassword.setForeground(new Color(255,255,255));
-        password = new CustomTextField(300, 30);
-        password.setForeground(Color.BLACK);
+        labelPassword.setForeground(Color.WHITE);
+        passwordField = new JPasswordField();
+        passwordField.setPreferredSize(new Dimension(300, 30));
+        passwordField.setMaximumSize(new Dimension(300, 30));
 
         //Application Name
         CustomLabel AppName = new CustomLabel("AnonChat", 100, 30);
-        AppName.setFont(new Font("Segoe UI", Font.BOLD, 30));
-        AppName.setForeground(new Color(255,255,255));
+        AppName.setForeground(new Color(220, 220, 220));
+        AppName.setFont(AppName.getFont().deriveFont(Font.BOLD, 24f));
         AppName.setAlignmentX(Component.CENTER_ALIGNMENT);
         AppName.setHorizontalAlignment(SwingConstants.CENTER);
 
         //Buttons
         createButton = new CustomButton("Create Room", 150, 40, new Color(255,255,255));
-        createButton.setForeground(new Color(0,0,0));
+        createButton.setForeground(Color.BLACK);
+        createButton.setFont(new Font("Segoe UI", Font.BOLD, 15));
+
         joinButton = new CustomButton("Join Room", 150, 40, new Color(51, 102, 255));
-        joinButton.setOpaque(false);
+        joinButton.setForeground(Color.WHITE);
+        joinButton.setFont(new Font("Segoe UI", Font.BOLD, 15));
 
         formPanel.add(Box.createVerticalGlue());
         formPanel.add(AppName);
         formPanel.add(Box.createRigidArea(new Dimension(0, 30)));
-        formPanel.add(labelUserName);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 2)));
-        formPanel.add(userName);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 15)));
-        formPanel.add(labelRoomName);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 2)));
-        formPanel.add(roomName);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 15)));
-        formPanel.add(labelPassword);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 2)));
-        formPanel.add(password);
+        addFormField(formPanel, labelUserName, userNameField);
+        addFormField(formPanel, labelRoomName, roomNameField);
+        addFormField(formPanel, labelPassword, passwordField);
         formPanel.add(Box.createRigidArea(new Dimension(0, 30)));
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        // buttonPanel.setOptimizedDrawingEnabled(false);
+        buttonPanel.setOpaque(false);
         buttonPanel.add(createButton);
         buttonPanel.add(joinButton);
         buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         buttonPanel.setMaximumSize(new Dimension(400, 50));
-        buttonPanel.setOpaque(false);
 
         formPanel.add(buttonPanel);
         formPanel.add(Box.createVerticalGlue());
-        formPanel.setBackground(new Color(0, 0, 0, 120));
+        formPanel.setOpaque(false);
+    
 
-        this.add(imagePanel);
-        this.add(formPanel);
+        add(imagePanel);
+        add(formPanel);
 
         addEventListeners();
     }
@@ -116,36 +157,35 @@ class LoginPage extends JPanel {
     private String CurrentPassword;
 
     public void addEventListeners() {
-        createButton.addActionListener(e -> {
-            CurrentUserName = userName.getText().trim();
-            CurrentRoomName = roomName.getText().trim();
-            CurrentPassword = password.getText();
+        ActionListener loginAction = e -> {
+            String username = userNameField.getText().trim();
+            String roomName = roomNameField.getText().trim();
+            String password = new String(passwordField.getPassword());
+            java.util.Arrays.fill(passwordField.getPassword(), ' '); // Clear password
 
-            if (CurrentUserName.isEmpty() || CurrentRoomName.isEmpty() || CurrentPassword.isEmpty()) {
-                JOptionPane.showMessageDialog(null, "Please fill in all fields.");
+            if (username.isEmpty() || roomName.isEmpty() || password.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Username, Room Name, and Password cannot be empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
-            mainFrame.switchToChatRoom(CurrentUserName, CurrentRoomName);
-        });
+            // *** Delegate login attempt to the Controller using new method ***
+            // Controller now handles both join/create logic internally based on room/key status
+            chatController.joinInitialRoom(username, roomName, password);
+        };
 
-        joinButton.addActionListener(e -> {
-            CurrentUserName = userName.getText().trim();
-            CurrentRoomName = roomName.getText().trim();
-            CurrentPassword = password.getText();
-
-            if (CurrentUserName.isEmpty() || CurrentRoomName.isEmpty() || CurrentPassword.isEmpty()) {
-                JOptionPane.showMessageDialog(null, "Please fill in all fields.");
-                return;
-            }
-
-            if (CurrentRoomName.equals(tempRoomName) && CurrentPassword.equals(tempPassword)) {
-                mainFrame.switchToChatRoom(CurrentUserName, CurrentRoomName);
-            } else {
-                JOptionPane.showMessageDialog(null, "Room name or password might be incorrect.");
-            }
-        });
+        createButton.addActionListener(loginAction);
+        joinButton.addActionListener(loginAction);
     }
+
+    private void addFormField(JPanel panel, JLabel label, JComponent field) {
+        label.setAlignmentX(Component.CENTER_ALIGNMENT);
+        field.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(label);
+        panel.add(Box.createRigidArea(new Dimension(0, 5)));
+        panel.add(field);
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
     super.paintComponent(g); // Let the default painting happen first
@@ -158,9 +198,9 @@ class LoginPage extends JPanel {
     int width = getWidth();
     int height = getHeight();
     
-    Color color1 = new Color(255,255, 255); 
-    Color color2 = new Color(102,102,102);
-    Color color3 = new Color(0,0,0);
+    Color color1 = new Color(255, 102, 255); 
+    Color color2 = new Color(77, 0, 77);
+    Color color3 = new Color(102, 0, 102);
 
     // Gradient parameters
     Point2D center = new Point2D.Float(width / 2.0f, height / 2.0f);

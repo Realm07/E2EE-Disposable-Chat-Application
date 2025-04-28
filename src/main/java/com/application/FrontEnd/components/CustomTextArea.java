@@ -1,4 +1,4 @@
-package components;
+package com.application.FrontEnd.components;
 
 import java.awt.Font;
 

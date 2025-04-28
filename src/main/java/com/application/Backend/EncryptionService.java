@@ -32,7 +32,7 @@ public class EncryptionService {
     // Returns true on success, false on failure
     public boolean deriveRoomKey(String roomName, String password) {
         try {
-            // **Salt Generation Strategy:**
+            // **Salt Generation Strategy: **
             // Ideally, salt should be unique per password *but* shareable.
             // Simple strategy for now: Use roomName bytes directly as salt material.
             // Weakness: Same room name -> same salt. A better approach would store/derive

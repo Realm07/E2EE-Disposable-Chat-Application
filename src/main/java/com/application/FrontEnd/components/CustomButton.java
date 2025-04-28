@@ -1,14 +1,12 @@
-package components;
+package com.application.FrontEnd.components;
 
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 
-// No ButtonModel import needed for this change
 import javax.swing.JButton;
 
 public class CustomButton extends JButton {
@@ -35,8 +33,6 @@ public class CustomButton extends JButton {
         setRolloverEnabled(false);
 
         setForeground(Color.WHITE); 
-
-        setFont(new Font("Segoe UI", Font.BOLD, 15));
     }
 
     @Override
@@ -51,11 +47,9 @@ public class CustomButton extends JButton {
            
             g2d.setColor(new Color(50, 50, 50));
         }
-
     
         g2d.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, cornerRadius, cornerRadius);
 
-      
         super.paintComponent(g);
 
         g2d.dispose(); 
@@ -69,4 +63,5 @@ public class CustomButton extends JButton {
     public Color getBackgroundColor() {
         return backgroundColor;
     }
+    
 }

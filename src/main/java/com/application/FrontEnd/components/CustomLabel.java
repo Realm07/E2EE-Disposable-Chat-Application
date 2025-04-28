@@ -1,9 +1,9 @@
-package components;
+package com.application.FrontEnd.components;
 
 import java.awt.Dimension;
 import java.awt.Font;
 
-import javax.swing.*;
+import javax.swing.JLabel;
 
 public class CustomLabel extends JLabel{
     public CustomLabel(String text, int width, int height){
@@ -13,7 +13,7 @@ public class CustomLabel extends JLabel{
 
         setMaximumSize(new Dimension(300, 30));
 
-        setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        setFont(new Font("Segoe UI", Font.BOLD, 15));
         
         
     }
