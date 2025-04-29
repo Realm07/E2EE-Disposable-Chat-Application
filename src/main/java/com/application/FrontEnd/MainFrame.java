@@ -18,11 +18,16 @@ public class MainFrame extends JFrame {
 
         setTitle("AnonChat E2EE"); // Update title maybe
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        try { // Basic error handling for image loading
-             Image icon = Toolkit.getDefaultToolkit().getImage("src/main/java/com/application/FrontEnd/images/Chat_logo.png"); // More specific path
-             setIconImage(icon);
+        try {
+            java.net.URL iconUrl = getClass().getResource("/com/application/FrontEnd/images/Chat_logo.png");
+            if (iconUrl != null) {
+                Image icon = Toolkit.getDefaultToolkit().getImage(iconUrl);
+                setIconImage(icon);
+            } else {
+                System.err.println("Warning: App icon not found in classpath.");
+            }
         } catch (Exception e) {
-             System.err.println("Warning: Could not load application icon.");
+            System.err.println("Warning: Could not load application icon: " + e.getMessage());
         }
         setBounds(100, 100, 850, 550); // Set initial size and position
 

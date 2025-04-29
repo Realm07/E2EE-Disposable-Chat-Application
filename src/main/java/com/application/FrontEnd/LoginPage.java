@@ -9,8 +9,9 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GridLayout;
-import java.awt.Image;
+import java.awt.GridLayout; // Keep this if using GridLayout elsewhere, not needed just for image panel
+// Remove unused Image import if only used for ImageIO approach
+// import java.awt.Image;
 import java.awt.MultipleGradientPaint.CycleMethod;
 import java.awt.RadialGradientPaint;
 import java.awt.RenderingHints;
@@ -20,7 +21,8 @@ import java.awt.geom.Point2D;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.ImageIcon;
+// Remove ImageIcon import if not used anymore
+// import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -55,39 +57,13 @@ public class LoginPage extends JPanel {
         this.setLayout(new GridLayout(1, 2));
         // this.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JPanel imagePanel = new JPanel(new BorderLayout());
-
-        try {
-            System.out.println("Attempting to load login image...");
-            java.net.URL imgUrl = getClass().getResource("/com/application/FrontEnd/images/Login_img.png");
-
-            if (imgUrl != null) {
-                System.out.println("Image URL found: " + imgUrl.toString());
-
-                ImageIcon imageIcon = new ImageIcon(imgUrl);
-                System.out.println("ImageIcon created successfully.");
-
-                Image scaledImage = imageIcon.getImage().getScaledInstance(300, -1, Image.SCALE_SMOOTH);
-                System.out.println("Image scaled successfully.");
-
-                JLabel imageLabel = new JLabel(new ImageIcon(scaledImage));
-                imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-                imagePanel.add(imageLabel, BorderLayout.CENTER);
-                System.out.println("Image label added to panel.");
-            } else {
-                System.err.println("Error: Login image not found in classpath: /com/application/FrontEnd/images/Login_img.png");
-                imagePanel.add(new JLabel("Image Not Found"), BorderLayout.CENTER); // Placeholder
-            }
-        } catch (Exception e) {
-            System.err.println("Error loading login image: " + e.getMessage());
-            e.printStackTrace(); // Stack trace for debugging
-            imagePanel.add(new JLabel("Image Load Failed"), BorderLayout.CENTER); // Placeholder
-        }
-
-        imagePanel.setBackground(new Color(64, 64, 64, 250));
+        String imagePath = "/com/application/FrontEnd/images/Login_img.png"; // Classpath resource path
+        CroppedImagePanel imagePanel = new CroppedImagePanel(imagePath);
+        // You might want to set a preferred size for the column if GridLayout isn't enough
+        // imagePanel.setPreferredSize(new Dimension(350, 0)); // Example: Preferred width
+        add(imagePanel); // Add directly to the GridLayout cell
 
 
-        //Mane panel
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
