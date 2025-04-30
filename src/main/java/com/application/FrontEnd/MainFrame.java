@@ -10,6 +10,7 @@ import javax.swing.*;
 public class MainFrame extends JFrame {
     private LoginPage loginPage;
     private ChatRoom chatRoom;
+    private PublicServerRoom publicServerRoom;
     private ChatController chatController; // Add reference to the controller
 
     public MainFrame() {
@@ -72,6 +73,22 @@ public class MainFrame extends JFrame {
         // Refresh UI
         revalidate();
         repaint();
+    }
+
+    public void switchToPublicRoom(String CurrentUserName){
+        System.out.println("[MainFrame] Switching to Pulbic server panel");
+        if (loginPage != null) {
+            remove(loginPage);
+            loginPage = null; // Allow garbage collection
+        }
+        publicServerRoom = new PublicServerRoom(this);
+        add(publicServerRoom);
+        revalidate();
+        repaint();
+    }
+
+    public void switchToPrivateRoom(){
+
     }
 
     // Main entry point for the application - Creates the MainFrame

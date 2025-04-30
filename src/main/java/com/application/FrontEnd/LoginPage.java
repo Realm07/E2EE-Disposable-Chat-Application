@@ -75,6 +75,7 @@ public class LoginPage extends JPanel {
             java.net.URL imgUrl = getClass().getResource(imagePath);
 
             if (imgUrl != null) {
+
                 imageIcon = new ImageIcon(imgUrl); // Load from URL
                 labelWithIcon.setIcon(imageIcon); // Set icon on the label
                 System.out.println("Logo loaded successfully from: " + imagePath);
@@ -167,12 +168,17 @@ public class LoginPage extends JPanel {
     private String CurrentPassword;
 
     public void addEventListeners() {
-        ActionListener loginAction = e -> {
-            
-        };
+        
+        publicRoom.addActionListener(e -> {
+            System.out.println("Pulbic Room panel initiated");
+            mainFrame.switchToPublicRoom(CurrentUserName); 
+        });
 
-        publicRoom.addActionListener(loginAction);
-        privateRoom.addActionListener(loginAction);
+        privateRoom.addActionListener(e ->{
+            System.out.println("Private Room panel initiated");
+            mainFrame.switchToPrivateRoom();
+        });
+
     }
 
     private void addFormField(JPanel panel, JLabel label, JComponent field) {
