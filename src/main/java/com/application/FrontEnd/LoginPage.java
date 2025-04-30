@@ -9,6 +9,8 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout; // Keep this if using GridLayout elsewhere, not needed just for image panel
 // Remove unused Image import if only used for ImageIO approach
 // import java.awt.Image;
@@ -17,10 +19,14 @@ import java.awt.RadialGradientPaint;
 import java.awt.RenderingHints;
 import java.awt.event.ActionListener;
 import java.awt.geom.Point2D;
+import java.io.IOException;
 
+import javax.imageio.ImageIO;
+import javax.print.DocFlavor.URL;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
 // Remove ImageIcon import if not used anymore
 // import javax.swing.ImageIcon;
 import javax.swing.JComponent;
@@ -38,14 +44,10 @@ import com.application.FrontEnd.components.CustomTextField;
 public class LoginPage extends JPanel {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-    private CustomButton createButton;
-    private CustomButton joinButton;
+    private CustomButton publicRoom;
+    private CustomButton privateRoom;
     private CustomTextField userNameField;
-    private CustomTextField roomNameField;
-    private JPasswordField passwordField;
 
-    private String tempRoomName = "Room123";
-    private String tempPassword = "Room123";
 
     private MainFrame mainFrame;
     private ChatController chatController;
@@ -54,77 +56,109 @@ public class LoginPage extends JPanel {
         this.mainFrame = mainFrame;
         this.chatController = chatController;
 
-        this.setLayout(new GridLayout(1, 2));
         // this.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        String imagePath = "/com/application/FrontEnd/images/Login_img.png"; // Classpath resource path
-        CroppedImagePanel imagePanel = new CroppedImagePanel(imagePath);
+        // String imagePath = "/com/application/FrontEnd/images/Login_img.png"; // Classpath resource path
+        // CroppedImagePanel imagePanel = new CroppedImagePanel(imagePath);
         // You might want to set a preferred size for the column if GridLayout isn't enough
         // imagePanel.setPreferredSize(new Dimension(350, 0)); // Example: Preferred width
-        add(imagePanel); // Add directly to the GridLayout cell
+        // add(imagePanel); // Add directly to the GridLayout cell
 
+        setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+
+
+        ImageIcon imageIcon = null; 
+        JLabel labelWithIcon = new JLabel(); 
+        try {
+            String imagePath = "/com/application/FrontEnd/images/Chat_logo.png";
+            java.net.URL imgUrl = getClass().getResource(imagePath);
+
+            if (imgUrl != null) {
+                imageIcon = new ImageIcon(imgUrl); // Load from URL
+                labelWithIcon.setIcon(imageIcon); // Set icon on the label
+                System.out.println("Logo loaded successfully from: " + imagePath);
+            } else {
+                System.err.println("ERROR: Could not find logo image resource at: " + imagePath);
+                labelWithIcon.setText("Logo Missing"); // Placeholder text
+                labelWithIcon.setForeground(Color.RED);
+            }
+        } catch (Exception e) {
+            System.err.println("ERROR: Exception while loading logo: " + e.getMessage());
+            e.printStackTrace();
+            labelWithIcon.setText("Logo Error"); // Placeholder text
+            labelWithIcon.setForeground(Color.RED);
+        }
+
+        labelWithIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
-        formPanel.setOpaque(false);
+
+        formPanel.setBackground(new Color(38, 38, 38));
+
+        Dimension boxSize = new Dimension(380, 400);
+        formPanel.setPreferredSize(boxSize);
+        formPanel.setMaximumSize(boxSize);
+        formPanel.setMinimumSize(boxSize);        
+
+        //Application Name
+        CustomLabel AppName = new CustomLabel("AnonChat", 100, 50);
+        AppName.setForeground(new Color(220, 220, 220));
+        AppName.setFont(AppName.getFont().deriveFont(Font.BOLD, 50f));
+        AppName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        AppName.setHorizontalAlignment(SwingConstants.CENTER);
 
         //User name
         CustomLabel labelUserName = new CustomLabel("User Name", 100, 30);
         labelUserName.setForeground(Color.WHITE);
+        labelUserName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        labelUserName.setHorizontalAlignment(SwingConstants.CENTER);
+
         userNameField = new CustomTextField(300, 30);
-
-        //Room name
-        CustomLabel labelRoomName = new CustomLabel("Room Name", 100, 30);
-        labelRoomName.setForeground(Color.WHITE);
-        roomNameField = new CustomTextField(300, 30);
-
-        //Password
-        CustomLabel labelPassword = new CustomLabel("Password", 100, 30);
-        labelPassword.setForeground(Color.WHITE);
-        passwordField = new JPasswordField();
-        passwordField.setPreferredSize(new Dimension(300, 30));
-        passwordField.setMaximumSize(new Dimension(300, 30));
-
-        //Application Name
-        CustomLabel AppName = new CustomLabel("AnonChat", 100, 30);
-        AppName.setForeground(new Color(220, 220, 220));
-        AppName.setFont(AppName.getFont().deriveFont(Font.BOLD, 24f));
-        AppName.setAlignmentX(Component.CENTER_ALIGNMENT);
-        AppName.setHorizontalAlignment(SwingConstants.CENTER);
+        userNameField.setOpaque(true);
+        userNameField.setHorizontalAlignment(SwingConstants.CENTER);
+        userNameField.setForeground(Color.BLACK);
+        userNameField.setCaretColor(Color.BLACK);
+        userNameField.setBorder(BorderFactory.createCompoundBorder(
+             BorderFactory.createLineBorder(new Color(80, 80, 100, 200), 1), // Slightly lighter border than bg
+             BorderFactory.createEmptyBorder(2, 5, 2, 5) // Inner padding
+         ));
 
         //Buttons
-        createButton = new CustomButton("Create Room", 150, 40, new Color(255,255,255));
-        createButton.setForeground(Color.BLACK);
-        createButton.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        publicRoom = new CustomButton("Public Rooms", 150, 40, new Color(255,255,255));
+        publicRoom.setForeground(Color.BLACK);
+        publicRoom.setFont(new Font("Segoe UI", Font.BOLD, 15));
 
-        joinButton = new CustomButton("Join Room", 150, 40, new Color(51, 102, 255));
-        joinButton.setForeground(Color.WHITE);
-        joinButton.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        privateRoom = new CustomButton("Private Room", 150, 40, new Color(51, 102, 255));
+        privateRoom.setForeground(Color.WHITE);
+        privateRoom.setFont(new Font("Segoe UI", Font.BOLD, 15));
 
         formPanel.add(Box.createVerticalGlue());
+        formPanel.add(labelWithIcon);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 20)));
         formPanel.add(AppName);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 30)));
-        addFormField(formPanel, labelUserName, userNameField);
-        addFormField(formPanel, labelRoomName, roomNameField);
-        addFormField(formPanel, labelPassword, passwordField);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 20)));
+        formPanel.add(labelUserName);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        formPanel.add(userNameField);
         formPanel.add(Box.createRigidArea(new Dimension(0, 30)));
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
         buttonPanel.setOpaque(false);
-        buttonPanel.add(createButton);
-        buttonPanel.add(joinButton);
+        buttonPanel.add(publicRoom);
+        buttonPanel.add(privateRoom);
         buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         buttonPanel.setMaximumSize(new Dimension(400, 50));
 
         formPanel.add(buttonPanel);
         formPanel.add(Box.createVerticalGlue());
-        formPanel.setOpaque(false);
-    
-
-        add(imagePanel);
-        add(formPanel);
-
+        
+        
+        
+        add(formPanel, gbc);
+        
         addEventListeners();
     }
 
@@ -134,23 +168,11 @@ public class LoginPage extends JPanel {
 
     public void addEventListeners() {
         ActionListener loginAction = e -> {
-            String username = userNameField.getText().trim();
-            String roomName = roomNameField.getText().trim();
-            String password = new String(passwordField.getPassword());
-            java.util.Arrays.fill(passwordField.getPassword(), ' '); // Clear password
-
-            if (username.isEmpty() || roomName.isEmpty() || password.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Username, Room Name, and Password cannot be empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-
-            // *** Delegate login attempt to the Controller using new method ***
-            // Controller now handles both join/create logic internally based on room/key status
-            chatController.joinInitialRoom(username, roomName, password);
+            
         };
 
-        createButton.addActionListener(loginAction);
-        joinButton.addActionListener(loginAction);
+        publicRoom.addActionListener(loginAction);
+        privateRoom.addActionListener(loginAction);
     }
 
     private void addFormField(JPanel panel, JLabel label, JComponent field) {
@@ -162,7 +184,8 @@ public class LoginPage extends JPanel {
         panel.add(Box.createRigidArea(new Dimension(0, 15)));
     }
 
-    @Override
+
+    // @Override
     protected void paintComponent(Graphics g) {
     super.paintComponent(g); // Let the default painting happen first
     
@@ -197,3 +220,18 @@ public class LoginPage extends JPanel {
     g2d.dispose(); // Dispose of the graphics copy
   }
 }
+
+
+//Old variables 
+//Room name
+// CustomLabel labelRoomName = new CustomLabel("Room Name", 100, 30);
+// labelRoomName.setForeground(Color.WHITE);
+// roomNameField = new CustomTextField(300, 30);
+
+// //Password
+// CustomLabel labelPassword = new CustomLabel("Password", 100, 30);
+// labelPassword.setForeground(Color.WHITE);
+// passwordField = new JPasswordField();
+// passwordField.setPreferredSize(new Dimension(300, 30));
+// passwordField.setMaximumSize(new Dimension(300, 30));
+
