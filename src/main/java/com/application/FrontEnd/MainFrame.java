@@ -43,14 +43,7 @@ public class MainFrame extends JFrame {
 
     public void switchToChatRoom(String currentUsername, String currentRoomName) {
         System.out.println("[MainFrame] Switching to ChatRoom for user: " + currentUsername + " in room: " + currentRoomName);
-        if (loginPage != null) {
-             remove(loginPage);
-             loginPage = null; // Release reference
-        }
-         if (chatRoom != null) { // Clean up old chat room if switching directly between rooms (future)
-             remove(chatRoom);
-         }
-
+        remove(publicServerRoom);
         chatRoom = new ChatRoom(currentUsername, currentRoomName, this, chatController); // Pass controller
         add(chatRoom);
         chatController.setActiveChatRoomUI(chatRoom); // *** Inform controller about the active UI ***
@@ -81,7 +74,7 @@ public class MainFrame extends JFrame {
             remove(loginPage);
             loginPage = null; // Allow garbage collection
         }
-        publicServerRoom = new PublicServerRoom(this);
+        publicServerRoom = new PublicServerRoom(this, CurrentUserName);
         add(publicServerRoom);
         revalidate();
         repaint();
