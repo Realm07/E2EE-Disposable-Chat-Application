@@ -20,7 +20,6 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane; // Import JLayeredPane
 import javax.swing.JOptionPane;
@@ -224,7 +223,7 @@ public class LoginPage extends JPanel { // Still extends JPanel
                 return;
             }
             System.out.println("Private Room panel initiated for user: " + currentUserName);
-            mainFrame.switchToPrivateRoom();
+            mainFrame.switchToPrivateRoom(currentUserName);
         });
     }
 

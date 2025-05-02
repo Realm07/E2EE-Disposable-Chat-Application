@@ -1,18 +1,9 @@
 package com.application.FrontEnd;
 
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JPanel;
-import javax.swing.SwingConstants;
+import com.application.FrontEnd.components.*;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-
+import java.awt.event.ComponentEvent;
+import java.net.URL;
 import java.awt.BorderLayout; // Use BorderLayout for the main LoginPage panel
 import java.awt.Color;
 import java.awt.Component;
@@ -25,44 +16,44 @@ import java.awt.Image;     // Need Image for the GIF
 import java.awt.RenderingHints; // For potentially smoother scaling
 import java.awt.Graphics2D; // For RenderingHints
 import java.awt.event.ComponentAdapter; // For resizing
-import java.awt.event.ComponentEvent;   // For resizing
-import java.net.URL; // Need this for loading resources (GIF, logo)
+ // Need this for loading resources (GIF, logo)
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
-import javax.swing.JLabel;
 import javax.swing.JLayeredPane; // Import JLayeredPane
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
-import com.application.FrontEnd.components.*;
+public class PrivateRoom extends JPanel{
 
-public class PublicServerRoom extends JPanel {
-    private CustomLabel titleLabel;
-
-    private CustomLabel nameLabel;
-    private CustomLabel userLabel ;
+    private CustomButton createButton;
     private CustomButton joinButton;
+    private CustomTextField roomName;
+    private CustomTextField password;
 
+    private String CurrentRoomName;
+    private String CurrentPassword;
     private String CurrentUserName;
-    
-    private MainFrame mainFrame;
 
     private JLayeredPane layeredPane;
     private BackgroundGifPanel backgroundPanel;
 
+    private MainFrame mainFrame;
+
     private static final String BACKGROUND_GIF_PATH = "/com/application/FrontEnd/images/Background01.gif";
 
-    public PublicServerRoom(MainFrame mainFrame, String userName){
+    private String tempRoomName = "Room123";
+    private String tempPassword = "Room123";
+
+    public PrivateRoom(MainFrame mainFrame, String userName){
         this.mainFrame = mainFrame;
         this.CurrentUserName = userName;
         
-        
-        this.setLayout(new BorderLayout(0,50)); 
-       
+        setLayout(new BorderLayout());
+
         layeredPane = new JLayeredPane();
         add(layeredPane, BorderLayout.CENTER);
        
@@ -71,66 +62,71 @@ public class PublicServerRoom extends JPanel {
         backgroundPanel.setBounds(0, 0, 10, 10);
         layeredPane.add(backgroundPanel, JLayeredPane.DEFAULT_LAYER);
 
+        JPanel formPanel = new JPanel();
+        formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
+        formPanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
 
-        JPanel mainContentPanel = new JPanel(new BorderLayout(0, 15));
-        mainContentPanel.setOpaque(false);
-        
+        //Room name
+        CustomLabel labelRoomName = new CustomLabel("Room Name", 100, 30);
+        labelRoomName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        labelRoomName.setForeground(new Color(255,255,255));
+        roomName = new CustomTextField(300, 30);
+        roomName.setForeground(Color.BLACK);
+
+        //Password
+        CustomLabel labelPassword = new CustomLabel("Password", 100, 30);
+        labelPassword.setAlignmentX(Component.CENTER_ALIGNMENT);
+        labelPassword.setForeground(new Color(255,255,255));
+        password = new CustomTextField(300, 30);
+        // JPasswordField password = new JPasswordField();
+        password.setPreferredSize(new Dimension(300, 30));
+        password.setForeground(Color.BLACK);
+
+        //Application Name
+        CustomLabel AppName = new CustomLabel("AnonChat", 100, 30);
+        AppName.setFont(new Font("Segoe UI", Font.BOLD, 30));
+        AppName.setForeground(new Color(255,255,255));
+        AppName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        AppName.setHorizontalAlignment(SwingConstants.CENTER);
+
+        //Buttons
+        createButton = new CustomButton("Create Room", 150, 40, new Color(255,255,255));
+        createButton.setForeground(new Color(0,0,0));
+        createButton.setFont(new Font("Segoe UI", Font.BOLD, 15));
+
+        joinButton = new CustomButton("Join Room", 150, 40, new Color(51, 102, 255));
+        joinButton.setFont(new Font("Segoe UI", Font.BOLD, 15));
+
+        formPanel.add(Box.createVerticalGlue());
+        formPanel.add(AppName);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 30)));
+        formPanel.add(labelRoomName);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 2)));
+        formPanel.add(roomName);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+        formPanel.add(labelPassword);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 2)));
+        formPanel.add(password);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 30)));
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        // buttonPanel.setOptimizedDrawingEnabled(false);
+        buttonPanel.add(createButton);
+        buttonPanel.add(joinButton);
+        buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        buttonPanel.setMaximumSize(new Dimension(400, 50));
+        buttonPanel.setOpaque(false);
+
+        formPanel.add(buttonPanel);
+        formPanel.add(Box.createVerticalGlue());
+        // formPanel.setBackground(new Color(0, 0, 0, 100));
+        formPanel.setOpaque(false);
+
+        formPanel.add(Box.createVerticalGlue()); // Push content up
 
 
-        //Header Lable panel
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        titleLabel = new CustomLabel("Public Servers", 300, 50);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 24f));
-        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        topPanel.add(titleLabel);
-        topPanel.setOpaque(false);
-        
-        //Index components panel
-        JPanel centerContentPanel = new JPanel();
-        centerContentPanel.setLayout(new BoxLayout(centerContentPanel, BoxLayout.Y_AXIS));
-        
-        CustomLabel indexName = new CustomLabel("Room Name", 120, 30);
-        CustomLabel indexUsernumber = new CustomLabel("Users Online", 120, 30);
-        CustomLabel indexJoin = new CustomLabel("Join Room", 120, 30);
-
-        //Index Label panel
-        JPanel indexHoldPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 120, 5)); 
-
-        indexHoldPanel.add(indexName);
-        indexHoldPanel.add(indexUsernumber);
-        indexHoldPanel.add(indexJoin);
-        indexHoldPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        indexHoldPanel.setOpaque(false);
-
-        centerContentPanel.add(indexHoldPanel);
-        
-
-        JPanel alphaPanel = createServerRooms("Alpha Room", "5/10", "Alpha", null);
-        JPanel bravoPanel = createServerRooms("Bravo Base", "10/10", "Bravo", null);
-        JPanel charliePanel = createServerRooms("Charlie Chat", "2/8", "Charlie", null);
-        JPanel deltaPanel = createServerRooms("Delta Den", "7/12", "Delta", null);
-        JPanel echoPanel = createServerRooms("Echo Chamber", "1/5", "Echo", null);       
-        
-        centerContentPanel.add(alphaPanel);
-        centerContentPanel.add(Box.createRigidArea(new Dimension(0, 10))); // Spacing
-        centerContentPanel.add(bravoPanel);
-        centerContentPanel.add(Box.createRigidArea(new Dimension(0, 10))); // Spacing
-        centerContentPanel.add(charliePanel);
-        centerContentPanel.add(Box.createRigidArea(new Dimension(0, 10))); // Spacing
-        centerContentPanel.add(deltaPanel);
-        centerContentPanel.add(Box.createRigidArea(new Dimension(0, 10))); // Spacing
-        centerContentPanel.add(echoPanel);
-
-        centerContentPanel.add(Box.createVerticalGlue());
-        centerContentPanel.setOpaque(false);
-
-        mainContentPanel.add(topPanel, BorderLayout.NORTH);
-        mainContentPanel.add(centerContentPanel, BorderLayout.CENTER);
-
-        layeredPane.add(mainContentPanel, JLayeredPane.PALETTE_LAYER);
-
-        
-
+        // 4b. Add formPanel (Content Layer) to Layered Pane
+        layeredPane.add(formPanel, JLayeredPane.PALETTE_LAYER);
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
@@ -145,46 +141,52 @@ public class PublicServerRoom extends JPanel {
                 int formH = 450; // Desired height for form
                 int x = (width - formW) / 2;
                 int y = (height - formH) / 2;
-                mainContentPanel.setBounds(0, 0, width, height); // Keep it centered // Keep it centered
+                formPanel.setBounds(Math.max(0,x), Math.max(0,y), formW, formH); // Keep it centered
         
                 // IMPORTANT: Update content layout
-                mainContentPanel.revalidate();
-                mainContentPanel.repaint();
+                formPanel.revalidate();
+                formPanel.repaint();
             }
         });
 
+        add(layeredPane, BorderLayout.CENTER);
+        
+        addEventListeners();
+
     }
 
-    private JPanel createServerRooms(String roomName, String userCount, String roomButton, String image){
-        JPanel rowPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 100, 5));
+    public void addEventListeners() {
+        createButton.addActionListener(e -> {
+            CurrentRoomName = roomName.getText().trim();
+            CurrentPassword = password.getText();
 
-        int nameWidth = 150;
-        int userWidth = 100;
-        int buttonWidth = 100;
-
-        nameLabel = new CustomLabel(roomButton, nameWidth, 30);
-        userLabel = new CustomLabel(userCount, userWidth, 30);
-        joinButton = new CustomButton(roomButton, buttonWidth, 30, Color.GRAY);
-
-        joinButton.addActionListener(e ->{
-            mainFrame.switchToChatRoom(CurrentUserName, roomName);
-            System.out.println(CurrentUserName);
+            if (CurrentUserName.isEmpty() || CurrentRoomName.isEmpty() || CurrentPassword.isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Please fill in all fields.");
+                return;
+            }
+            System.out.println("Room created successfully");
+            mainFrame.switchToChatRoom(CurrentUserName, CurrentRoomName);
         });
 
-        rowPanel.add(nameLabel);
-        rowPanel.add(userLabel);
-        rowPanel.add(joinButton);
-        rowPanel.setBackground(Color.BLUE);
+        joinButton.addActionListener(e -> {
+            CurrentRoomName = roomName.getText().trim();
+            CurrentPassword = password.getText();
 
-        int preferredHeight = nameLabel.getPreferredSize().height + 15;
-        rowPanel.setPreferredSize(new Dimension(100, preferredHeight)); 
-        rowPanel.setMaximumSize(new Dimension(700, preferredHeight));
-        rowPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
-        
-        rowPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        return rowPanel;
+            if (CurrentUserName.isEmpty() || CurrentRoomName.isEmpty() || CurrentPassword.isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Please fill in all fields.");
+                return;
+            }
+
+            if (CurrentRoomName.equals(tempRoomName) && CurrentPassword.equals(tempPassword)) {
+                System.out.println("Authentication successfull joining room");
+                mainFrame.switchToChatRoom(CurrentUserName, CurrentRoomName);
+            } else {
+                JOptionPane.showMessageDialog(null, "Room name or password might be incorrect.");
+            }
+        });
     }
 
+        // --- Inner Class for Background GIF Panel ---
     private class BackgroundGifPanel extends JPanel {
         private Image gifImage;
         private String errorMessage = null;
@@ -252,7 +254,4 @@ public class PublicServerRoom extends JPanel {
         }
     }
     // --- End Inner Class ---
-
-    
-
-}
+}   

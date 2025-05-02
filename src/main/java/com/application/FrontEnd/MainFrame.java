@@ -11,6 +11,7 @@ public class MainFrame extends JFrame {
     private LoginPage loginPage;
     private ChatRoom chatRoom;
     private PublicServerRoom publicServerRoom;
+    private PrivateRoom privateRoom;
     private ChatController chatController; // Add reference to the controller
 
     public MainFrame() {
@@ -43,7 +44,16 @@ public class MainFrame extends JFrame {
 
     public void switchToChatRoom(String currentUsername, String currentRoomName) {
         System.out.println("[MainFrame] Switching to ChatRoom for user: " + currentUsername + " in room: " + currentRoomName);
-        remove(publicServerRoom);
+
+        if(publicServerRoom != null){
+            remove(publicServerRoom);
+        }
+
+        if(privateRoom != null){
+            remove(privateRoom);
+        }
+
+        
         chatRoom = new ChatRoom(currentUsername, currentRoomName, this, chatController); // Pass controller
         add(chatRoom);
         chatController.setActiveChatRoomUI(chatRoom); // *** Inform controller about the active UI ***
@@ -80,8 +90,13 @@ public class MainFrame extends JFrame {
         repaint();
     }
 
-    public void switchToPrivateRoom(){
-
+    public void switchToPrivateRoom(String CurrentUserName){
+        System.out.println("[MainFrame] Switching to Private server panel");
+        remove(loginPage);
+        privateRoom = new PrivateRoom(this, CurrentUserName);
+        add(privateRoom);
+        revalidate();
+        repaint();
     }
 
     // Main entry point for the application - Creates the MainFrame
