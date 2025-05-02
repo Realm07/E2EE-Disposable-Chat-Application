@@ -48,6 +48,9 @@ public class PrivateRoom extends JPanel{
     private String tempRoomName = "Room123";
     private String tempPassword = "Room123";
 
+    private CustomButton backButton;
+    private static final String BACK_ICON_PATH = "/com/application/FrontEnd/images/left-arrow.png";
+
     public PrivateRoom(MainFrame mainFrame, String userName){
         this.mainFrame = mainFrame;
         this.CurrentUserName = userName;
@@ -62,10 +65,59 @@ public class PrivateRoom extends JPanel{
         backgroundPanel.setBounds(0, 0, 10, 10);
         layeredPane.add(backgroundPanel, JLayeredPane.DEFAULT_LAYER);
 
+        JPanel headerWrapperPanel = new JPanel(new BorderLayout()); // Use BorderLayout
+        headerWrapperPanel.setOpaque(false);
+        ImageIcon backIcon = null;
+
+        try {
+            java.net.URL iconURL = getClass().getResource(BACK_ICON_PATH);
+            if(iconURL != null){
+                backIcon = new ImageIcon(iconURL);
+                System.out.println("Back icon loaded successfully.");
+            } else {
+                System.err.println("ERROR: Could not find back icon resource at: " + BACK_ICON_PATH);
+            }
+        } catch (Exception e) {
+            System.err.println("ERROR: Exception loading back icon: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        backButton = new CustomButton("", 40, 40, Color.GRAY);
+
+        if (backIcon != null) {
+            backButton.setIcon(backIcon);
+        } else {
+            backButton.setText("<"); // Fallback text if icon fails
+            backButton.setFont(new Font("SansSerif", Font.BOLD, 20));
+        }
+
+        backButton.setBorderPainted(false);
+        backButton.setContentAreaFilled(false); // Make background transparent
+        backButton.setFocusPainted(false);
+        backButton.setOpaque(false);
+        // Set fixed size based on icon/desired size
+        Dimension btnSize = new Dimension(40, 40); // Match constructor or icon size
+        backButton.setPreferredSize(btnSize);
+        backButton.setMinimumSize(btnSize);
+        backButton.setMaximumSize(btnSize);
+
+        headerWrapperPanel.add(backButton, BorderLayout.WEST);
+        backButton.addActionListener(e -> {
+            System.out.println("Back button clicked");
+            // Call the method on mainFrame to go back, e.g.:
+            mainFrame.switchToLoginPage();
+            // Or mainFrame.goBack(); or whatever method you have
+        });
+
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///     icon not loading 
+        headerWrapperPanel.setAlignmentX(Component.CENTER_ALIGNMENT); // Align header in BoxLayout
+        formPanel.add(headerWrapperPanel);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 30))); 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //Room name
         CustomLabel labelRoomName = new CustomLabel("Room Name", 100, 30);
         labelRoomName.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -88,7 +140,9 @@ public class PrivateRoom extends JPanel{
         AppName.setForeground(new Color(255,255,255));
         AppName.setAlignmentX(Component.CENTER_ALIGNMENT);
         AppName.setHorizontalAlignment(SwingConstants.CENTER);
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        headerWrapperPanel.add(AppName, BorderLayout.CENTER);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //Buttons
         createButton = new CustomButton("Create Room", 150, 40, new Color(255,255,255));
         createButton.setForeground(new Color(0,0,0));

@@ -70,6 +70,12 @@ public class MainFrame extends JFrame {
              chatController.setActiveChatRoomUI(null); // *** Inform controller UI is no longer active ***
              chatRoom = null; // Release reference
         }
+        if (publicServerRoom != null){
+            remove(publicServerRoom);
+        }
+        if (privateRoom != null){
+            remove(privateRoom);
+        }
         loginPage = new LoginPage(this, chatController); // Pass controller
         add(loginPage);
 
