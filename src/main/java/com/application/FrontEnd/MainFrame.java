@@ -12,9 +12,11 @@ public class MainFrame extends JFrame {
     private LoginPage loginPage;
     private ChatRoom chatRoom;
     private PublicServerRoom publicServerRoom;
+    private PrivateRoomPage privateRoomPage; // Added
     private ChatController chatController; // Add reference to the controller
     public static Font sansationRegular; // Make fonts accessible
     public static Font sansationBold;
+
     public MainFrame() {
 
         chatController = new ChatController(this);
@@ -51,13 +53,17 @@ public class MainFrame extends JFrame {
 
         System.out.println("MainFrame Initialized. Size: " + getSize());
     }
-
+    public ChatController getChatController() {
+        return chatController;
+    }
     public void switchToChatRoom(String currentUsername, String currentRoomName) {
         System.out.println("[MainFrame] Switching to ChatRoom for user: " + currentUsername + " in room: " + currentRoomName);
-        remove(publicServerRoom);
+        // Remove whatever panel is currently showing
+        getContentPane().removeAll(); // Remove all components from content pane
+
         chatRoom = new ChatRoom(currentUsername, currentRoomName, this, chatController); // Pass controller
         add(chatRoom);
-        chatController.setActiveChatRoomUI(chatRoom); // *** Inform controller about the active UI ***
+        chatController.setActiveChatRoomUI(chatRoom); // Inform controller about the active UI
 
         // Refresh UI
         revalidate();
@@ -66,11 +72,19 @@ public class MainFrame extends JFrame {
 
     public void switchToLoginPage() {
         System.out.println("[MainFrame] Switching to LoginPage.");
+        // Remove whatever panel is currently showing
+        getContentPane().removeAll(); // Remove all components from content pane
+
+        // Deactivate chat UI if it was active
         if (chatRoom != null) {
-             remove(chatRoom);
-             chatController.setActiveChatRoomUI(null); // *** Inform controller UI is no longer active ***
-             chatRoom = null; // Release reference
+            chatController.setActiveChatRoomUI(null);
+            chatRoom = null;
         }
+        // Release references to other pages too
+        publicServerRoom = null;
+        privateRoomPage = null;
+
+
         loginPage = new LoginPage(this, chatController); // Pass controller
         add(loginPage);
 
@@ -79,20 +93,48 @@ public class MainFrame extends JFrame {
         repaint();
     }
 
-    public void switchToPublicRoom(String CurrentUserName){
-        System.out.println("[MainFrame] Switching to Pulbic server panel");
-        if (loginPage != null) {
-            remove(loginPage);
-            loginPage = null; // Allow garbage collection
-        }
-        publicServerRoom = new PublicServerRoom(this, CurrentUserName);
+
+    public void switchToPublicRoom(String currentUserName){
+        System.out.println("[MainFrame] Switching to Public server panel");
+        // Remove whatever panel is currently showing
+        getContentPane().removeAll();
+
+        // Release references to other pages
+        loginPage = null;
+        chatRoom = null;
+        privateRoomPage = null;
+        if (chatRoom != null) chatController.setActiveChatRoomUI(null); // Deactivate chat UI if switching from it
+
+
+        publicServerRoom = new PublicServerRoom(this, currentUserName);
         add(publicServerRoom);
         revalidate();
         repaint();
     }
 
-    public void switchToPrivateRoom(){
+    public void switchToPrivateRoom(String currentUserName){ // Pass the username!
+        System.out.println("[MainFrame] Switching to Private Room Page for user: " + currentUserName);
+        // Remove whatever panel is currently showing
+        getContentPane().removeAll();
 
+        // Release references to other pages
+        loginPage = null;
+        chatRoom = null;
+        publicServerRoom = null;
+        if (chatRoom != null) chatController.setActiveChatRoomUI(null); // Deactivate chat UI if switching from it
+
+
+        privateRoomPage = new PrivateRoomPage(this, currentUserName); // Pass username
+        add(privateRoomPage);
+        revalidate();
+        repaint();
+    }
+    public void switchToPrivateRoom(){
+        // This version might be called from LoginPage *before* username is finalized
+        // It's better to ensure username is passed.
+        // For now, let's assume LoginPage passes it correctly.
+        System.err.println("[MainFrame] Warning: switchToPrivateRoom() called without username. This might lead to issues.");
+        // Or, find a way to retrieve the username from LoginPage if needed, but passing is cleaner.
     }
 
     private static void loadCustomFonts() {
