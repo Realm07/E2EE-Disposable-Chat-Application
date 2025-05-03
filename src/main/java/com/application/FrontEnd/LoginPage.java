@@ -1,300 +1,366 @@
+// src/main/java/com/application/FrontEnd/LoginPage.java
 package com.application.FrontEnd;
 
-// Imports kept for existing form components + Added imports for Layered Pane and GIF handling
-import java.awt.BorderLayout; // Use BorderLayout for the main LoginPage panel
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics; // Need Graphics for custom painting
-import java.awt.Image;     // Need Image for the GIF
-import java.awt.RenderingHints; // For potentially smoother scaling
-import java.awt.Graphics2D; // For RenderingHints
-import java.awt.event.ComponentAdapter; // For resizing
-import java.awt.event.ComponentEvent;   // For resizing
-import java.net.URL; // Need this for loading resources (GIF, logo)
-
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.ImageIcon;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JLayeredPane; // Import JLayeredPane
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.SwingConstants;
-
 import com.application.Backend.ChatController;
-import com.application.FrontEnd.components.CustomButton;
-import com.application.FrontEnd.components.CustomLabel;
-import com.application.FrontEnd.components.CustomTextField;
+import com.application.FrontEnd.components.CustomTextField; // Using your custom field
 
-public class LoginPage extends JPanel { // Still extends JPanel
+import javax.swing.*;
+import javax.swing.border.MatteBorder;
+import java.awt.*;
+import java.awt.event.*;
+import javax.imageio.ImageIO;
+import java.io.IOException;
+import java.net.URL;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////
-    private CustomButton publicRoom;
-    private CustomButton privateRoom;
+public class LoginPage extends JPanel {
+
+    // --- UI Components ---
     private CustomTextField userNameField;
+    private JButton submitButton;   // Arrow button
+    private JButton infoButton;     // Top-left 'i' icon button
+    private JLabel aboutLabel;
+    private JLabel versionLabel;
+    private JPanel formPanel;       // Panel holding the centered form elements
 
+    // --- References ---
     private MainFrame mainFrame;
     private ChatController chatController;
 
-    // --- Fields for Layered Pane Approach ---
+    // --- Fields for Layered Pane ---
     private JLayeredPane layeredPane;
-    // *** Replace backgroundLabel with our custom panel ***
-    private BackgroundGifPanel backgroundPanel; // To hold and SCALE the GIF
-    private JPanel formPanel;       // To hold the login controls
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private BackgroundImagePanel backgroundPanel; // Inner class handles background
 
-    // Paths
-    private static final String BACKGROUND_GIF_PATH = "/com/application/FrontEnd/images/Background01.gif"; // Path to your GIF
-    private static final String LOGO_IMAGE_PATH = "/com/application/FrontEnd/images/Chat_logo.png";
+    // --- Resource Paths ---
+    private static final String BACKGROUND_IMAGE_PATH = "/com/application/FrontEnd/images/BG_LoginPage.jpg"; // Correct JPG background
+    private static final String LOGO_IMAGE_PATH = "/com/application/FrontEnd/images/ICON_Logo.png";
+    private static final String INFO_ICON_PATH = "/com/application/FrontEnd/images/ICON_Info.png";
+    private static final String SUBMIT_ICON_PATH = "/com/application/FrontEnd/images/ICON_Front.png";
 
-
+    // --- Constructor ---
     public LoginPage(MainFrame mainFrame, ChatController chatController) {
         this.mainFrame = mainFrame;
         this.chatController = chatController;
 
-        // Set layout for the main LoginPage panel
-        setLayout(new BorderLayout()); // Use BorderLayout to make layeredPane fill it
+        // Set main layout for this LoginPage panel
+        setLayout(new BorderLayout());
 
-        // Initialize LayeredPane
+        // Create and add the Layered Pane
         layeredPane = new JLayeredPane();
-        add(layeredPane, BorderLayout.CENTER); // Add layeredPane to fill LoginPage
+        add(layeredPane, BorderLayout.CENTER); // Make layered pane fill this panel
 
-        // Initialize and add Background Panel (Layer 0)
-        // *** Use the new BackgroundGifPanel ***
-        backgroundPanel = new BackgroundGifPanel(BACKGROUND_GIF_PATH);
-        // Initial bounds will be set by listener
-        backgroundPanel.setBounds(0, 0, 10, 10);
-        layeredPane.add(backgroundPanel, JLayeredPane.DEFAULT_LAYER); // Add to bottom layer
+        // Create and add the Background Panel (Bottom Layer)
+        backgroundPanel = new BackgroundImagePanel(BACKGROUND_IMAGE_PATH);
+        // Initial bounds are small, resize listener will fix this
+        backgroundPanel.setBounds(0, 0, 1, 1);
+        layeredPane.add(backgroundPanel, JLayeredPane.DEFAULT_LAYER); // Layer 0
 
+        // Create and add the Form Panel (Top Layer)
+        createFormPanel(); // Use helper method
+        // Initial bounds are small, resize listener will fix this
+        formPanel.setBounds(0, 0, 1, 1);
+        layeredPane.add(formPanel, JLayeredPane.PALETTE_LAYER); // Layer ~100
 
-        // --- Initialize Form Panel (Layer 1) --- (No changes needed here)
-        formPanel = new JPanel(); // Use the class member
-        formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
-        formPanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
-        formPanel.setOpaque(false); // Keep form transparent
+        // Create and add absolutely positioned elements (Highest Layer)
+        infoButton = createIconButton(INFO_ICON_PATH, "i", "Info");
+        infoButton.setBounds(15, 15, 32, 32); // Initial position
+        layeredPane.add(infoButton, JLayeredPane.MODAL_LAYER); // Layer ~200
 
-        Dimension boxSize = new Dimension(380, 400);
-        formPanel.setPreferredSize(boxSize);
-        formPanel.setMaximumSize(boxSize);
-        formPanel.setMinimumSize(boxSize);
+        versionLabel = new JLabel("v1.0.0");
+        versionLabel.setForeground(Color.DARK_GRAY); // Color from previous version
+        versionLabel.setFont(MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(10f) : new Font("SansSerif", Font.BOLD, 10));
+        versionLabel.setBounds(0, 0, 100, 20); // Dummy initial bounds
+        layeredPane.add(versionLabel, JLayeredPane.MODAL_LAYER);
 
-        // --- Create and Add Components to formPanel --- (No changes needed here)
-        JLabel labelWithIcon = createLogoLabel();
-        labelWithIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        CustomLabel AppName = new CustomLabel("AnonChat", 100, 50);
-        AppName.setForeground(new Color(220, 220, 220));
-        AppName.setFont(AppName.getFont().deriveFont(Font.BOLD, 50f));
-        AppName.setAlignmentX(Component.CENTER_ALIGNMENT);
-        AppName.setHorizontalAlignment(SwingConstants.CENTER);
-
-        CustomLabel labelUserName = new CustomLabel("User Name", 100, 30);
-        labelUserName.setForeground(Color.WHITE);
-        labelUserName.setAlignmentX(Component.CENTER_ALIGNMENT);
-        labelUserName.setHorizontalAlignment(SwingConstants.CENTER);
-
-        userNameField = new CustomTextField(300, 30);
-        userNameField.setOpaque(false);
-        userNameField.setBackground(new Color(240, 240, 240));
-        userNameField.setForeground(Color.BLACK);
-        userNameField.setCaretColor(Color.BLACK);
-        userNameField.setHorizontalAlignment(SwingConstants.CENTER);
-        userNameField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(255,255,255), 1),
-                BorderFactory.createEmptyBorder(2, 5, 2, 5)
-        ));
-
-        publicRoom = new CustomButton("Public Rooms", 150, 40, new Color(255, 255, 255));
-        publicRoom.setForeground(Color.BLACK);
-        publicRoom.setFont(new Font("Segoe UI", Font.BOLD, 15));
-
-        privateRoom = new CustomButton("Private Room", 150, 40, new Color(51, 102, 255));
-        privateRoom.setForeground(Color.WHITE);
-        privateRoom.setFont(new Font("Segoe UI", Font.BOLD, 15));
-
-        formPanel.add(Box.createVerticalGlue());
-        formPanel.add(labelWithIcon);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-        formPanel.add(AppName);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-        formPanel.add(labelUserName);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 5)));
-        formPanel.add(userNameField);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 30)));
-
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        buttonPanel.setOpaque(false);
-        buttonPanel.add(publicRoom);
-        buttonPanel.add(privateRoom);
-        buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        buttonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
-
-        formPanel.add(buttonPanel);
-        formPanel.add(Box.createVerticalGlue());
-
-        // Add formPanel to the Layered Pane (higher layer)
-        formPanel.setBounds(0, 0, boxSize.width, boxSize.height); // Initial bounds
-        layeredPane.add(formPanel, JLayeredPane.PALETTE_LAYER); // Add form on top
-
-
-        // Add Listener for Resizing/Centering
-        addComponentListener(new ComponentAdapter() {
+        // Add resize listener to the LAYERED PANE
+        layeredPane.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
+                System.out.println("[LoginPage] Layered Pane Resized: " + layeredPane.getSize());
                 resizeAndCenterComponents();
             }
+            // Optional: Also trigger on componentShown to ensure initial positioning
             @Override
             public void componentShown(ComponentEvent e) {
-                 resizeAndCenterComponents();
+                System.out.println("[LoginPage] Layered Pane Shown");
+                // Give layout manager a chance to settle before initial positioning
+                SwingUtilities.invokeLater(LoginPage.this::resizeAndCenterComponents);
             }
         });
 
+        // Attach Event Listeners to interactive components
         addEventListeners();
     }
 
+    /** Creates and configures the form panel with its components. */
+    private void createFormPanel() {
+        formPanel = new JPanel(new GridBagLayout());
+        formPanel.setOpaque(false); // Make transparent
 
-    // Helper method to create the logo label (No changes needed)
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridwidth = GridBagConstraints.REMAINDER;
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.insets = new Insets(5, 10, 5, 10); // Consistent padding
+
+        // Logo
+        JLabel logoLabel = createLogoLabel();
+        gbc.gridy = 0; gbc.insets = new Insets(20, 10, 5, 10); // Adjust top/bottom padding
+        formPanel.add(logoLabel, gbc);
+
+        // App Name
+        JLabel appNameLabel = new JLabel("A N O N C H A T");
+        appNameLabel.setForeground(Color.BLACK);
+        appNameLabel.setFont(MainFrame.sansationBold.deriveFont(18f));
+        appNameLabel.setBorder(BorderFactory.createMatteBorder(0,0,1,0, Color.BLACK)); // Underline
+        gbc.gridy = 1; gbc.insets = new Insets(5, 10, 30, 10); // Space below
+        formPanel.add(appNameLabel, gbc);
+
+        // Username Label
+        JLabel labelUserName = new JLabel("Enter Username:");
+        labelUserName.setForeground(Color.BLACK);
+        labelUserName.setFont(MainFrame.sansationRegular.deriveFont(15f));
+        gbc.gridy = 2; gbc.insets = new Insets(0, 10, 8, 10);
+        formPanel.add(labelUserName, gbc);
+
+        // Input Panel (Username Field + Submit Button)
+        JPanel inputPanel = createInputPanel();
+        gbc.gridy = 3; gbc.insets = new Insets(0, 10, 40, 10); // Space below
+        gbc.fill = GridBagConstraints.NONE;
+        formPanel.add(inputPanel, gbc);
+
+        // About Label
+        aboutLabel = new JLabel("About");
+        aboutLabel.setForeground(Color.BLACK);
+        aboutLabel.setFont(MainFrame.sansationRegular.deriveFont(14f));
+        aboutLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        aboutLabel.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) { showInfoDialog(); }
+            // Removed hover effect for black text
+        });
+        gbc.gridy = 4; gbc.insets = new Insets(10, 10, 10, 10);
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.weighty = 10.0; // Pushes the "About" slightly down if there's extra vertical space
+        gbc.fill = GridBagConstraints.NONE;
+        formPanel.add(aboutLabel, gbc);
+    }
+
+
+    /** Helper to create the combined Username Field and Submit Button Panel */
+    private JPanel createInputPanel() {
+        JPanel inputPanel = new JPanel(new BorderLayout(8, 0)); // Horizontal gap 8
+        inputPanel.setOpaque(false);
+        // Constrain size
+        Dimension inputSize = new Dimension(260, 35); // Defined size for the input area
+        inputPanel.setPreferredSize(inputSize);
+        inputPanel.setMaximumSize(inputSize);
+        inputPanel.setMinimumSize(inputSize);
+
+
+        userNameField = new CustomTextField(200, 30); // Custom component
+        userNameField.setFont(MainFrame.sansationRegular.deriveFont(16f));
+        userNameField.setHorizontalAlignment(SwingConstants.LEFT);
+        userNameField.setForeground(Color.BLACK);
+        userNameField.setCaretColor(Color.BLACK);
+        userNameField.setOpaque(false);
+        userNameField.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.BLACK)); // Underline
+
+        submitButton = createIconButton(SUBMIT_ICON_PATH, "\u2192", "Go"); // Right arrow
+
+        inputPanel.add(userNameField, BorderLayout.CENTER);
+        inputPanel.add(submitButton, BorderLayout.EAST);
+
+        return inputPanel;
+    }
+
+    /** Helper to create icon buttons (info, submit) */
+    private JButton createIconButton(String iconPath, String fallbackText, String tooltip) {
+        JButton button = new JButton();
+        button.setToolTipText(tooltip);
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setOpaque(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        Dimension iconButtonSize = new Dimension(30, 30); // Fixed size for icons
+        button.setPreferredSize(iconButtonSize);
+        button.setMinimumSize(iconButtonSize);
+        button.setMaximumSize(iconButtonSize);
+
+        try {
+            URL iconUrl = getClass().getResource(iconPath);
+            if (iconUrl != null) {
+                ImageIcon icon = new ImageIcon(iconUrl);
+                if (icon.getIconWidth() > 0) {
+                    Image scaledImage = icon.getImage().getScaledInstance(24, 24, Image.SCALE_SMOOTH); // Scale icon
+                    button.setIcon(new ImageIcon(scaledImage));
+                } else { throw new IOException("Icon ImageIcon invalid"); }
+            } else { throw new IOException("Icon resource not found: " + iconPath); }
+        } catch (Exception ex) {
+            System.err.println("Warning: Could not load icon " + iconPath + ". Using text fallback. " + ex.getMessage());
+            button.setText(fallbackText);
+            button.setFont(new Font("SansSerif", Font.BOLD, 20));
+            button.setForeground(Color.BLACK); // Fallback text color
+        }
+        return button;
+    }
+
+
+    /** Helper to create the logo label, scaled */
     private JLabel createLogoLabel() {
         JLabel label = new JLabel();
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        label.setVerticalAlignment(SwingConstants.CENTER);
         try {
             URL imgUrl = getClass().getResource(LOGO_IMAGE_PATH);
             if (imgUrl != null) {
-                label.setIcon(new ImageIcon(imgUrl));
-                System.out.println("Logo loaded successfully from: " + LOGO_IMAGE_PATH);
-            } else {
-                System.err.println("ERROR: Could not find logo image resource at: " + LOGO_IMAGE_PATH);
-                label.setText("Logo Missing");
-                label.setForeground(Color.RED);
-                 label.setFont(new Font("SansSerif", Font.BOLD, 12));
-            }
+                ImageIcon icon = new ImageIcon(imgUrl);
+                if (icon.getIconWidth() > 0) {
+                    Image scaledImage = icon.getImage().getScaledInstance(100, -1, Image.SCALE_SMOOTH); // Scale width=100
+                    label.setIcon(new ImageIcon(scaledImage));
+                    label.setPreferredSize(new Dimension(100, ((ImageIcon)label.getIcon()).getIconHeight())); // Set preferred size based on scaled icon
+                } else throw new Exception("Logo ImageIcon invalid");
+            } else { throw new Exception("Logo resource not found"); }
         } catch (Exception e) {
-            System.err.println("ERROR: Exception while loading logo: " + e.getMessage());
-            e.printStackTrace();
-            label.setText("Logo Error");
-            label.setForeground(Color.RED);
-             label.setFont(new Font("SansSerif", Font.BOLD, 12));
+            // Fallback: Display text logo
+            System.err.println("ERROR loading logo (" + LOGO_IMAGE_PATH + "): " + e.getMessage());
+            label.setText("AnonChat Logo"); // Placeholder text
+            label.setForeground(Color.DARK_GRAY); // Darker text for fallback
+            label.setFont(MainFrame.sansationBold.deriveFont(18f));
+            label.setPreferredSize(new Dimension(150, 50)); // Give fallback text some size
         }
         return label;
     }
 
-    // Method to handle resizing and centering logic
+    /** Recalculates bounds for layered components on resize */
     private void resizeAndCenterComponents() {
-        int layeredWidth = layeredPane.getWidth();
-        int layeredHeight = layeredPane.getHeight();
+        // Use invokeLater to ensure calculations happen after component hierarchy is potentially updated
+        SwingUtilities.invokeLater(() -> {
+            int layeredWidth = layeredPane.getWidth();
+            int layeredHeight = layeredPane.getHeight();
+            if (layeredWidth <= 0 || layeredHeight <= 0) return; // Skip if no size yet
 
-        // *** Resize background *panel* to fill the layered pane ***
-        if (backgroundPanel != null) {
-             backgroundPanel.setBounds(0, 0, layeredWidth, layeredHeight);
-        }
+            // Resize background to fill layered pane
+            if (backgroundPanel != null) {
+                backgroundPanel.setBounds(0, 0, layeredWidth, layeredHeight);
+            }
 
-        // Center the form panel (No changes needed here)
-        if (formPanel != null) {
-            Dimension formSize = formPanel.getPreferredSize();
-            int formW = formSize.width;
-            int formH = formSize.height;
-            int x = Math.max(0, (layeredWidth - formW) / 2);
-            int y = Math.max(0, (layeredHeight - formH) / 2);
-            formPanel.setBounds(x, y, formW, formH);
-        }
+            // Center form panel (recalculate preferred size in case content changed)
+            if (formPanel != null) {
+                Dimension formPrefSize = formPanel.getPreferredSize(); // Recalculate preferred size
+                int formW = Math.min(formPrefSize.width, layeredWidth - 40); // Don't exceed pane width
+                int formH = Math.min(formPrefSize.height, layeredHeight - 40); // Don't exceed pane height
+                int x = (layeredWidth - formW) / 2;
+                int y = (layeredHeight - formH) / 2;
+                formPanel.setBounds(x, y, formW, formH);
+                System.out.println("[LoginPage Resize] Form panel bounds set to: " + formPanel.getBounds()); // Debug
+            }
+
+            // Position version label bottom-right
+            if (versionLabel != null) {
+                Dimension labelSize = versionLabel.getPreferredSize();
+                int x = layeredWidth - labelSize.width - 15;
+                int y = layeredHeight - labelSize.height - 10;
+                versionLabel.setBounds(x, y, labelSize.width, labelSize.height);
+            }
+
+            // Position info button top-left
+            if (infoButton != null) {
+                Dimension btnSize = infoButton.getPreferredSize();
+                infoButton.setBounds(15, 15, btnSize.width, btnSize.height);
+            }
+
+            // Crucial: Revalidate the layered pane AFTER setting bounds
+            layeredPane.revalidate();
+            layeredPane.repaint();
+        });
     }
 
-
-    // --- Event Listeners --- (No changes needed)
+    /** Attaches listeners to interactive components */
     public void addEventListeners() {
-        publicRoom.addActionListener(e -> {
+        // Action for submit button and Enter key in username field
+        ActionListener loginAction = e -> {
             String currentUserName = userNameField.getText().trim();
             if (currentUserName.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Please enter a User Name.", "Input Required", JOptionPane.WARNING_MESSAGE);
+                userNameField.requestFocusInWindow(); // Put focus back
                 return;
             }
-            System.out.println("Public Room panel initiated for user: " + currentUserName);
-            mainFrame.switchToPublicRoom(currentUserName);
-        });
+            System.out.println("User entered: " + currentUserName + ". Switching to Public Rooms view.");
+            mainFrame.switchToPublicRoom(currentUserName); // Go to public rooms list
+        };
 
-        privateRoom.addActionListener(e -> {
-            String currentUserName = userNameField.getText().trim();
-            if (currentUserName.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Please enter a User Name.", "Input Required", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            System.out.println("Private Room panel initiated for user: " + currentUserName);
-            mainFrame.switchToPrivateRoom();
-        });
+        submitButton.addActionListener(loginAction);
+        userNameField.addActionListener(loginAction); // Trigger on Enter
+
+        // Action for info button
+        infoButton.addActionListener(e -> showInfoDialog());
     }
 
-    // --- Inner Class for Background GIF Panel ---
-    private class BackgroundGifPanel extends JPanel {
-        private Image gifImage;
-        private String errorMessage = null;
-        private String imagePathUsed; // Store path for error messages
+    /** Shows a simple 'About' dialog */
+    private void showInfoDialog() {
+        JOptionPane.showMessageDialog(mainFrame, // Parent frame
+                "AnonChat E2EE v1.0.0\n\nA simple E2EE chat proof-of-concept.\n" +
+                        "Images & concept @ Realm07.", // Example text
+                "About AnonChat",               // Dialog title
+                JOptionPane.INFORMATION_MESSAGE); // Icon type
+    }
 
-        public BackgroundGifPanel(String imagePath) {
+    // --- Inner Class for Background Image Panel (Handles ImageIO loading and COVER scaling) ---
+    private static class BackgroundImagePanel extends JPanel {
+        private Image backgroundImage;
+        private String errorMessage = null;
+        private String imagePathUsed;
+
+        public BackgroundImagePanel(String imagePath) {
             this.imagePathUsed = imagePath;
             try {
-                URL gifUrl = getClass().getResource(imagePath);
-                if (gifUrl != null) {
-                    ImageIcon icon = new ImageIcon(gifUrl);
-                    if (icon.getIconWidth() == -1) { // Basic check if loading failed
-                         this.errorMessage = "Failed to load GIF: ImageIcon error";
-                         System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
-                         this.gifImage = null;
-                    } else {
-                        this.gifImage = icon.getImage(); // Get the Image object
-                        System.out.println("[BackgroundGifPanel] GIF Image loaded successfully from: " + imagePath);
-                    }
-                } else {
-                    this.errorMessage = "GIF resource not found";
-                    System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
-                    this.gifImage = null;
-                }
-            } catch (Exception e) {
-                this.errorMessage = "Exception loading GIF: " + e.getMessage();
-                System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
-                e.printStackTrace();
-                this.gifImage = null;
+                URL imgUrl = getClass().getResource(imagePath);
+                if (imgUrl != null) {
+                    this.backgroundImage = ImageIO.read(imgUrl);
+                    if (this.backgroundImage == null) throw new IOException("ImageIO returned null for " + imagePath);
+                    System.out.println("[BGPanel] Loaded: " + imagePath);
+                } else { throw new IOException("Resource not found: " + imagePath); }
+            } catch (IOException e) {
+                this.errorMessage = "Ex loading background: " + e.getMessage();
+                System.err.println(errorMessage); this.backgroundImage = null;
             }
-             // Important: Set opaque false if you want things behind this panel (in the layered pane)
-             // to potentially show through (though likely not needed here as it's the bottom layer)
-             // setOpaque(false);
+            // IMPORTANT: Background panel MUST be opaque IF it's the base layer covering everything.
+            setOpaque(true);
         }
 
         @Override
         protected void paintComponent(Graphics g) {
-            super.paintComponent(g); // Paint background if opaque, handle borders etc.
-
-            if (gifImage != null) {
-                // --- Draw the image scaled to fill the panel ---
+            super.paintComponent(g); // Crucial for opaque=true to clear background
+            if (backgroundImage != null) {
                 Graphics2D g2d = (Graphics2D) g.create();
-                // Optional: Add rendering hints for potentially better scaling quality
+                // --- Draw image scaled to COVER ---
+                int panelW = getWidth(); int panelH = getHeight();
+                int imgW = backgroundImage.getWidth(this); int imgH = backgroundImage.getHeight(this);
+                if(imgW <= 0 || imgH <= 0) { g2d.dispose(); return; } // Check image loaded ok
+                double imgAspect = (double) imgW / imgH; double panelAspect = (double) panelW / panelH;
+                int drawW, drawH, drawX, drawY;
+                if (panelAspect > imgAspect) { drawW = panelW; drawH = (int)(panelW / imgAspect); drawX = 0; drawY = (panelH - drawH) / 2; }
+                else { drawH = panelH; drawW = (int)(panelH * imgAspect); drawX = (panelW - drawW) / 2; drawY = 0; }
+                // Use interpolation for better quality when scaling
                 g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                // Draw the image, scaling it to the component's current width and height.
-                // Passing 'this' as the ImageObserver is crucial for animated GIFs to repaint correctly.
-                g2d.drawImage(gifImage, 0, 0, getWidth(), getHeight(), this);
+                g2d.drawImage(backgroundImage, drawX, drawY, drawW, drawH, this);
+                // --- End Cover Scaling ---
                 g2d.dispose();
-                // --- End drawing ---
             } else {
-                // Draw fallback background and error message if image failed to load
-                g.setColor(new Color(77, 0, 77)); // Dark purple fallback
+                // Draw fallback background and error message
+                g.setColor(new Color(20, 30, 40)); // Dark blue fallback
                 g.fillRect(0, 0, getWidth(), getHeight());
-                g.setColor(Color.YELLOW);
-                g.setFont(new Font("SansSerif", Font.BOLD, 14));
-                String text = "BG Load Error: " + (errorMessage != null ? errorMessage : "Unknown");
+                g.setColor(Color.YELLOW); g.setFont(new Font("SansSerif", Font.BOLD, 14));
                 FontMetrics fm = g.getFontMetrics();
+                String text = "BG Load Error: " + (errorMessage != null ? errorMessage : "Unknown");
                 int msgWidth = fm.stringWidth(text);
-                g.drawString(text, Math.max(5, (getWidth() - msgWidth) / 2) , getHeight() / 2 + fm.getAscent() / 2);
-                 String pathText = "(" + imagePathUsed + ")";
-                 msgWidth = fm.stringWidth(pathText);
-                 g.drawString(pathText, Math.max(5, (getWidth() - msgWidth) / 2) , getHeight() / 2 + fm.getAscent() / 2 + fm.getHeight());
-
+                g.drawString(text, Math.max(5, (getWidth() - msgWidth) / 2), getHeight() / 2 + fm.getAscent() / 2 - fm.getHeight()/2); // Center slightly better
+                String pathText = "(" + imagePathUsed + ")";
+                msgWidth = fm.stringWidth(pathText);
+                g.drawString(pathText, Math.max(5, (getWidth() - msgWidth) / 2), getHeight() / 2 + fm.getAscent() / 2 + fm.getHeight()/2);
             }
         }
-    }
-    // --- End Inner Class ---
+    } // --- End Inner Class ---
 
 } // End LoginPage class
