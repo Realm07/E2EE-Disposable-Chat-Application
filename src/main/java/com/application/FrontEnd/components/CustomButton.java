@@ -2,6 +2,7 @@ package com.application.FrontEnd.components;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -31,6 +32,8 @@ public class CustomButton extends JButton {
         setOpaque(false);
 
         setRolloverEnabled(false);
+
+        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
         setForeground(Color.WHITE); 
     }

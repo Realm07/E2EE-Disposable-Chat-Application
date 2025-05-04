@@ -121,32 +121,32 @@ public class InfoPage extends JPanel {
         centerPanel.setBorder(BorderFactory.createEmptyBorder(10, 40, 40, 40));
         centerPanel.setOpaque(false);
 
-        infoText = "Welcome to the ephemeral world of AnonChat, a communication platform built for spontaneous connection. Dive into real-time conversations without the need for permanent accounts or lengthy sign-up processes. Your identity is simply the username you choose for the current session.\r\n" + //
+        infoText = "-Welcome to the ephemeral world of AnonChat, a communication platform built for spontaneous connection. Dive into real-time conversations without the need for permanent accounts or lengthy sign-up processes. Your identity is simply the username you choose for the current session.\r\n" + //
                         "\r\n" + //
-                        "AnonChat is designed around transient interaction. When you close the application, your session ends. This focus on immediate communication makes it ideal for quick group chats, joining public discussions, or setting up temporary private spaces.\r\n" + //
+                        "-AnonChat is designed around transient interaction. When you close the application, your session ends. This focus on immediate communication makes it ideal for quick group chats, joining public discussions, or setting up temporary private spaces.\r\n" + //
                         "\r\n" + //
-                        "Your journey begins at the dynamic Login screen, featuring animated visuals. Enter your chosen username for this session, and then decide your path: will you explore the established Public Servers or create/join a Private Room?\r\n" + //
+                        "-Your journey begins at the dynamic Login screen, featuring animated visuals. Enter your chosen username for this session, and then decide your path: will you explore the established Public Servers or create/join a Private Room?\r\n" + //
                         "\r\n" + //
-                        "The Public Servers area offers a list of pre-configured chat hubs open to all users. Beside each room name, you can see a basic indicator of current activity. Simply select a room and click 'Join' to enter the shared conversation space instantly.\r\n" + //
+                        "-The Public Servers area offers a list of pre-configured chat hubs open to all users. Beside each room name, you can see a basic indicator of current activity. Simply select a room and click 'Join' to enter the shared conversation space instantly.\r\n" + //
                         "\r\n" + //
-                        "For more controlled discussions, navigate to the Private Room section. Here, you hold the keys. To start a new, exclusive chat, enter a unique Room Name and a Password, then click 'Create Room'. This combination becomes the entry requirement for anyone else wanting to join.\r\n" + //
+                        "-For more controlled discussions, navigate to the Private Room section. Here, you hold the keys. To start a new, exclusive chat, enter a unique Room Name and a Password, then click 'Create Room'. This combination becomes the entry requirement for anyone else wanting to join.\r\n" + //
                         "\r\n" + //
-                        "To enter an existing private space, you must know both the exact Room Name and the correct Password used when it was created. Input these credentials and click 'Join Room'. The application verifies access based on this specific name/password pair.\r\n" + //
+                        "-To enter an existing private space, you must know both the exact Room Name and the correct Password used when it was created. Input these credentials and click 'Join Room'. The application verifies access based on this specific name/password pair.\r\n" + //
                         "\r\n" + //
-                        "Conversations within these Private Rooms gain essential confidentiality. AnonChat employs an encryption layer where the security key itself is generated directly from the unique combination of the room's name and its password. Every message sent and received within that specific private session is protected using this derived key.\r\n" + //
+                        "-Conversations within these Private Rooms gain essential confidentiality. AnonChat employs an encryption layer where the security key itself is generated directly from the unique combination of the room's name and its password. Every message sent and received within that specific private session is protected using this derived key.\r\n" + //
                         "\r\n" + //
-                        "AnonChat presents a unique visual identity using the Java Swing framework. Custom-built interface elements provide a distinct look, while key screens utilize animated backgrounds managed through layered panes, adding a layer of visual depth to the user experience. Navigation between sections is designed to be straightforward, often featuring a dedicated 'Back' button with an icon for easy returns.\r\n" + //
+                        "-AnonChat presents a unique visual identity using the Java Swing framework. Custom-built interface elements provide a distinct look, while key screens utilize animated backgrounds managed through layered panes, adding a layer of visual depth to the user experience. Navigation between sections is designed to be straightforward, often featuring a dedicated 'Back' button with an icon for easy returns.\r\n" + //
                         "\r\n" + //
-                        "Under the hood, the application relies on the Pusher service for its core real-time messaging capabilities, ensuring swift delivery across connected clients. Project structure and dependencies are managed using Apache Maven. The private room security layer is handled by a custom Encryption Service.\r\n" + //
+                        "-Under the hood, the application relies on the Pusher service for its core real-time messaging capabilities, ensuring swift delivery across connected clients. Project structure and dependencies are managed using Apache Maven. The private room security layer is handled by a custom Encryption Service.\r\n" + //
                         "\r\n" + //
-                        "AnonChat serves as a functional demonstration of these combined technologies, showcasing concepts in GUI design, real-time networking, and basic session-based communication security.\r\n" + //
+                        "-AnonChat serves as a functional demonstration of these combined technologies, showcasing concepts in GUI design, real-time networking, and basic session-based communication security.\r\n" + //
                         "\r\n" + //
-                        "Created By:\r\n" + //
+                        "-Created By:\r\n" + //
                         "\r\n" + //
                         "-Mohammad Shees Abdulla" + 
                         "\r\n" +
                         "-Mohammad Monis Ahmed";
-
+                        
         infoTextArea = new JTextArea(infoText);
         infoTextArea.setFont(new Font("SansSerif", Font.PLAIN, 18));
         infoTextArea.setForeground(Color.BLACK);

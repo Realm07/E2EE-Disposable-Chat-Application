@@ -1,17 +1,20 @@
 // src/main/java/com/application/FrontEnd/PublicServerRoom.java
 package com.application.FrontEnd;
 
+import com.application.FrontEnd.components.*;
+
 // Core Swing & AWT Imports
 import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
 import java.awt.event.*; // For action/mouse listeners
 import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
+
 // Image Loading Imports
 import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.net.URL;
+import java.util.concurrent.Flow;
 
 import com.application.Backend.ChatController;
 /**
@@ -68,34 +71,33 @@ public class PublicServerRoom extends JPanel {
         this.chatController = controller;
 
         setLayout(new BorderLayout(0, 0));
-        setOpaque(false); // This main panel is just a container for the layered pane
+        setOpaque(false); 
 
-        // Create and add the Layered Pane
         layeredPane = new JLayeredPane();
         add(layeredPane, BorderLayout.CENTER);
 
-        // Create and add the Page Background Panel (Bottom Layer)
         pageBackgroundPanel = new PageBackgroundPanel(PAGE_BACKGROUND_PATH);
-        layeredPane.add(pageBackgroundPanel, JLayeredPane.DEFAULT_LAYER); // Layer 0
+        layeredPane.add(pageBackgroundPanel, JLayeredPane.DEFAULT_LAYER); 
 
-        // Create the main content overlay panel (Transparent)
         JPanel mainContentPanel = new JPanel(new BorderLayout(0, 0));
         mainContentPanel.setOpaque(false);
 
-        // --- Create and Add Sub-Panels to mainContentPanel ---
-        JPanel topPanel = createTopPanel(); // Has transparent background
+        JPanel topPanel = createTopPanel(); 
         mainContentPanel.add(topPanel, BorderLayout.NORTH);
 
-        JPanel centerPanel = createCenterPanel(); // Holds ribbon + list, transparent background
-        mainContentPanel.add(centerPanel, BorderLayout.CENTER);
+        JPanel centerWrapperPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0,0));
+        centerWrapperPanel.setOpaque(false);
 
-        JPanel footerPanel = createFooterPanel(); // Transparent background
+        JPanel centerPanel = createCenterPanel(); 
+        centerWrapperPanel.add(centerPanel);
+
+        mainContentPanel.add(centerWrapperPanel, BorderLayout.CENTER);
+
+        JPanel footerPanel = createFooterPanel(); 
         mainContentPanel.add(footerPanel, BorderLayout.SOUTH);
 
-        // Add the main content overlay panel ABOVE the background
-        layeredPane.add(mainContentPanel, JLayeredPane.PALETTE_LAYER); // Layer ~100
+        layeredPane.add(mainContentPanel, JLayeredPane.PALETTE_LAYER);
 
-        // Add resize listener to size/position layered components correctly
         layeredPane.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
@@ -108,34 +110,27 @@ public class PublicServerRoom extends JPanel {
         });
     }
 
-    /** Recalculates bounds for layered components */
     private void resizeAndPositionComponents() {
-        // Use invokeLater to ensure calculations happen after EDT has processed events
         SwingUtilities.invokeLater(() -> {
             int w = layeredPane.getWidth();
             int h = layeredPane.getHeight();
-            if (w <= 0 || h <= 0) return; // Avoid calculations if panel not ready
+            if (w <= 0 || h <= 0) return; 
 
-            // Background panel fills the entire layered pane
             if (pageBackgroundPanel != null) pageBackgroundPanel.setBounds(0, 0, w, h);
 
-            // Main content panel also fills the entire layered pane, overlaying the background
             Component[] comps = layeredPane.getComponentsInLayer(JLayeredPane.PALETTE_LAYER.intValue());
             if (comps.length > 0 && comps[0] instanceof JPanel) {
                 comps[0].setBounds(0, 0, w, h);
             }
-
-            // Revalidate the layered pane to ensure children layouts are updated
             layeredPane.revalidate();
             layeredPane.repaint();
         });
     }
 
-    /** Creates the top panel (transparent) with back button and centered title. */
     private JPanel createTopPanel() {
         JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setOpaque(false); // Allow page background to show through
-        topPanel.setBorder(BorderFactory.createEmptyBorder(15, 25, 15, 25)); // Increased Padding
+        topPanel.setOpaque(false); 
+        topPanel.setBorder(BorderFactory.createEmptyBorder(15, 25, 15, 25)); 
 
         // Back Button
         JButton backButton = createIconButton(ICON_BACK_PATH, "\u2190", "Back");
@@ -145,11 +140,10 @@ public class PublicServerRoom extends JPanel {
         JLabel titleLabel = new JLabel("Public Rooms");
         titleLabel.setFont(MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(32f) : new Font("SansSerif", Font.BOLD, 32));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        titleLabel.setForeground(Color.BLACK); // Black title text
+        titleLabel.setForeground(Color.BLACK); 
 
-        // Placeholder for balance if needed (can be empty label)
         JLabel rightPlaceholder = new JLabel();
-        rightPlaceholder.setPreferredSize(backButton.getPreferredSize()); // Match size
+        rightPlaceholder.setPreferredSize(backButton.getPreferredSize()); 
 
         topPanel.add(backButton, BorderLayout.WEST);
         topPanel.add(titleLabel, BorderLayout.CENTER);
@@ -158,22 +152,17 @@ public class PublicServerRoom extends JPanel {
         return topPanel;
     }
 
-    /** Creates the center area containing the header ribbon and room list */
     private JPanel createCenterPanel() {
         JPanel centerPanel = new JPanel();
         centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
-        centerPanel.setOpaque(false); // Transparent, shows page background
+        centerPanel.setOpaque(false); 
 
-        // Header Ribbon
         JPanel headerRow = createHeaderRibbon();
         centerPanel.add(headerRow);
 
-        // Room List Panel
         JPanel roomListPanel = new JPanel();
-        // Stack rows vertically
         roomListPanel.setLayout(new BoxLayout(roomListPanel, BoxLayout.Y_AXIS));
         roomListPanel.setOpaque(false);
-        // Padding around the entire list
         roomListPanel.setBorder(BorderFactory.createEmptyBorder(20, 35, 20, 35)); // Adjusted padding
 
         // Fixed list of rooms
@@ -185,15 +174,12 @@ public class PublicServerRoom extends JPanel {
                     ROOM_IDS[i],
                     imagePath
             );
-            // Set maximum height to control vertical stretching by BoxLayout
-            row.setMaximumSize(new Dimension(Short.MAX_VALUE, row.getPreferredSize().height + 5)); // Allow slight growth
+            // row.setMaximumSize(new Dimension(Short.MAX_VALUE, row.getPreferredSize().height + 5)); 
             roomListPanel.add(row);
-            // Add spacing *between* rows
             if (i < ROOM_IDS.length - 1) {
-                roomListPanel.add(Box.createRigidArea(new Dimension(0, 15))); // Increased spacing
+                roomListPanel.add(Box.createRigidArea(new Dimension(0, 15))); 
             }
         }
-        // Add glue to push rows towards the top if extra space exists
         centerPanel.add(Box.createVerticalGlue());
         centerPanel.add(roomListPanel);
         centerPanel.add(Box.createVerticalGlue());
@@ -202,55 +188,46 @@ public class PublicServerRoom extends JPanel {
         return centerPanel;
     }
 
+    private int TARGET_CONTENT_WIDTH = 800;
 
-    /** Creates the white header ribbon with thicker borders and larger centered fonts. */
     private JPanel createHeaderRibbon() {
-        final int ribbonHeight = 60; // Increased height
-        final int borderThickness = 2;
+        final int ribbonHeight = 60; 
+        final int borderThickness = 3;
 
-        // Panel with custom painting for borders
         JPanel headerPanel = new JPanel(new GridBagLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
-                super.paintComponent(g); // Let L&F paint background (set below)
+                super.paintComponent(g);
                 Graphics2D g2d = (Graphics2D) g.create();
-                // Draw thicker top/bottom borders
                 g2d.setColor(HEADER_RIBBON_BORDER);
                 g2d.setStroke(new BasicStroke(borderThickness));
-                // Adjust y-coordinate based on stroke width for precise placement
-                g2d.drawLine(0, borderThickness / 2, getWidth(), borderThickness / 2); // Top
-                g2d.drawLine(0, getHeight() - 1 - borderThickness / 2, getWidth(), getHeight() - 1 - borderThickness / 2); // Bottom
+                g2d.drawLine(0, borderThickness / 2, getWidth(), borderThickness / 2); 
+                g2d.drawLine(0, getHeight() - 1 - borderThickness / 2, getWidth(), getHeight() - 1 - borderThickness / 2); 
                 g2d.dispose();
             }
-            // Define size constraints
-            @Override public Dimension getPreferredSize() { return new Dimension(super.getPreferredSize().width, ribbonHeight); }
+            @Override public Dimension getPreferredSize() { int prefContentWidth = super.getPreferredSize().width; return new Dimension(Math.max(TARGET_CONTENT_WIDTH, prefContentWidth), ribbonHeight); }
             @Override public Dimension getMinimumSize() { return new Dimension(400, ribbonHeight);}
             @Override public Dimension getMaximumSize() { return new Dimension(Short.MAX_VALUE, ribbonHeight + 5); }
         };
-        headerPanel.setOpaque(true); // Ribbon needs to be opaque white
+        headerPanel.setOpaque(true); 
         headerPanel.setBackground(HEADER_RIBBON_BACKGROUND);
-        // Only internal padding - custom painting handles border lines
         headerPanel.setBorder(BorderFactory.createEmptyBorder(5, 20, 5, 20));
 
-        // GridBagConstraints setup (Same weights, increased font size)
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridy = 0; gbc.anchor = GridBagConstraints.CENTER; gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(0, 15, 0, 15); // Increased internal spacing
+        gbc.insets = new Insets(0, 15, 0, 15); 
 
         Font headerFont = MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(20f) : new Font("SansSerif", Font.BOLD, 20); // Larger
         Color headerColor = HEADER_RIBBON_TEXT;
 
-        // Room Name Header
         JLabel nameHeader = new JLabel("Room Name");
         nameHeader.setFont(headerFont); nameHeader.setForeground(headerColor); nameHeader.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridx = 0; gbc.weightx = 0.45; headerPanel.add(nameHeader, gbc);
 
-        // Connected Users Header
         JLabel usersHeader = new JLabel("Connected Users");
         usersHeader.setFont(headerFont); usersHeader.setForeground(headerColor); usersHeader.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridx = 1; gbc.weightx = 0.25; headerPanel.add(usersHeader, gbc);
 
-        // Enter Room Header
         JLabel joinHeader = new JLabel("Enter Room");
         joinHeader.setFont(headerFont); joinHeader.setForeground(headerColor); joinHeader.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridx = 2; gbc.weightx = 0.30; headerPanel.add(joinHeader, gbc);
@@ -259,97 +236,75 @@ public class PublicServerRoom extends JPanel {
     }
 
 
-    /** Creates a single room row panel with updated styling */
     private JPanel createRoomRow(String roomDisplayName, int userCount, String roomIdentifier, String imagePath) {
-        // Use the custom panel for rows with alpha
         ImageBackgroundRowPanel rowPanel = new ImageBackgroundRowPanel(imagePath, ROW_BACKGROUND_ALPHA);
         rowPanel.setLayout(new GridBagLayout());
-        // Padding *inside* the row panel (around components)
-        rowPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20)); // Increased padding
+        rowPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20)); 
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridy = 0; gbc.anchor = GridBagConstraints.CENTER; gbc.fill = GridBagConstraints.BOTH; // Fill cells vertically+horizontally
-        gbc.insets = new Insets(0, 10, 0, 10); // Spacing between components
+        gbc.gridy = 0; gbc.anchor = GridBagConstraints.CENTER; gbc.fill = GridBagConstraints.BOTH; 
+        gbc.insets = new Insets(0, 10, 0, 10); 
 
-        // Fonts - Increased sizes
-        Font nameFont = MainFrame.sansationBold.deriveFont(20f); // Larger Bold
-        Font countFont = MainFrame.sansationBold.deriveFont(22f); // Larger Bold
-        Font buttonFont = MainFrame.sansationBold.deriveFont(16f); // Larger Bold
+        Font nameFont = MainFrame.sansationBold.deriveFont(20f); 
+        Font countFont = MainFrame.sansationBold.deriveFont(22f); 
+        Font buttonFont = MainFrame.sansationBold.deriveFont(16f);
 
-        // Room Name Label (Standard JLabel)
         JLabel nameLabel = new JLabel(roomDisplayName);
-        nameLabel.setFont(nameFont); nameLabel.setForeground(ROW_NAME_TEXT_COLOR); // Black text
-        nameLabel.setOpaque(false); // Transparent over background image
-        gbc.gridx = 0; gbc.weightx = 0.45; gbc.anchor = GridBagConstraints.LINE_START; // Align text left
+        nameLabel.setFont(nameFont); nameLabel.setForeground(ROW_NAME_TEXT_COLOR); 
+        nameLabel.setOpaque(false); 
+        gbc.gridx = 0; gbc.weightx = 0.45; gbc.anchor = GridBagConstraints.LINE_START; 
         rowPanel.add(nameLabel, gbc);
 
-        // User Count Label (Standard JLabel)
         JLabel userLabel = new JLabel(String.valueOf(userCount));
-        userLabel.setFont(countFont); userLabel.setForeground(ROW_COUNT_TEXT_COLOR); // Green text
+        userLabel.setFont(countFont); userLabel.setForeground(ROW_COUNT_TEXT_COLOR); 
         userLabel.setHorizontalAlignment(SwingConstants.CENTER);
         userLabel.setOpaque(false);
-        gbc.gridx = 1; gbc.weightx = 0.25; gbc.anchor = GridBagConstraints.CENTER; // Center label
+        gbc.gridx = 1; gbc.weightx = 0.25; gbc.anchor = GridBagConstraints.CENTER; 
         rowPanel.add(userLabel, gbc);
 
-        // --- Join Button with Custom Background Panel ---
-        JButton joinButton = new JButton("Enter Room");
-        joinButton.setFont(buttonFont);
+        CustomButton joinButton = new CustomButton("Join Room", 120, 45, new Color(102, 255, 102, 120));
         joinButton.setForeground(ROW_BUTTON_TEXT_COLOR);
-        joinButton.setOpaque(false); // Button itself must be transparent
-        joinButton.setContentAreaFilled(false); // Don't paint default background
-        joinButton.setBorderPainted(true); // Paint the border
-        joinButton.setFocusPainted(false);
-        joinButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        joinButton.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ROW_BUTTON_BORDER_COLOR, 1), // White border
-                BorderFactory.createEmptyBorder(8, 25, 8, 25) // Button padding
-        ));
+        joinButton.setBorder(BorderFactory.createEmptyBorder(8, 25, 8, 25));
+
         joinButton.addActionListener(e -> {
             System.out.println("[PublicServerRoom] User '" + currentUsername + "' attempting to join public room: '" + roomIdentifier + "'");
-            // Call the dedicated method for public rooms - NO password passed from UI
             chatController.joinPublicRoom(currentUsername, roomIdentifier);
         });
-        // Container panel that paints the semi-transparent green background
-        JPanel buttonContainer = new JPanel(new GridBagLayout()) { // Use GBL to center button easily
+        JPanel buttonContainer = new JPanel(new GridBagLayout()) { 
             @Override
             protected void paintComponent(Graphics g) {
-                // Do NOT call super.paintComponent(g) if setOpaque(false)
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(ROW_BUTTON_BACKGROUND_COLOR);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12); // Rounded corners
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12); 
                 g2.dispose();
             }
-            @Override // Ensure container requests enough space for the button + padding
+            @Override 
             public Dimension getPreferredSize() {
                 return joinButton.getPreferredSize();
             }
-            @Override // And respects minimum size
+            @Override 
             public Dimension getMinimumSize() {
                 return joinButton.getMinimumSize();
             }
         };
-        buttonContainer.setOpaque(false); // Container is transparent
-        // Add button to the container using GridBagConstraints to center it
+        buttonContainer.setOpaque(false); 
         buttonContainer.add(joinButton, new GridBagConstraints());
 
         gbc.gridx = 2; gbc.weightx = 0.30;
-        gbc.fill = GridBagConstraints.NONE; // Don't stretch the button container panel
-        gbc.anchor = GridBagConstraints.CENTER; // Center the container panel
-        rowPanel.add(buttonContainer, gbc); // Add the container with the button
-        // --- End Button ---
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.anchor = GridBagConstraints.CENTER; 
+        rowPanel.add(buttonContainer, gbc); 
 
-        // Set overall row size constraints AFTER adding components
-        int rowHeight = 75; // Desired height for rows
-        rowPanel.setPreferredSize(new Dimension(600, rowHeight));
-        rowPanel.setMinimumSize(new Dimension(400, rowHeight -5));
-        rowPanel.setMaximumSize(new Dimension(Short.MAX_VALUE, rowHeight + 5));
+        int rowHeight = 85; 
+        rowPanel.setPreferredSize(new Dimension(TARGET_CONTENT_WIDTH , rowHeight));
+        rowPanel.setMinimumSize(new Dimension(400, rowHeight - 10));
+        rowPanel.setMaximumSize(new Dimension(Short.MAX_VALUE, rowHeight + 10));
 
         return rowPanel;
     }
 
 
-    /** Creates the footer panel with version info. */
     private JPanel createFooterPanel() {
         JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         footerPanel.setOpaque(false);
@@ -397,54 +352,47 @@ public class PublicServerRoom extends JPanel {
 
         @Override
         protected void paintComponent(Graphics g) {
-            // DO NOT call super.paintComponent(g) when opaque is false and we paint the full area.
-            // super.paintComponent(g); // Remove this if opaque is false
-
-            Graphics2D g2d = (Graphics2D) g.create(); // Work on a copy of the graphics context
+            // Don't call super.paintComponent(g) when opaque is false and painting background
+            Graphics2D g2d = (Graphics2D) g.create();
             int w = getWidth();
             int h = getHeight();
 
-            // 1. Optional: Fill with parent's background color first for smoother blending
-            // Container parent = getParent();
-            // if (parent != null) {
-            //     g2d.setColor(parent.getBackground());
-            //     g2d.fillRect(0, 0, w, h);
-            // } else {
-            //      // Fallback if no parent background available (shouldn't happen in normal Swing hierarchy)
-            g2d.setColor(new Color(230, 235, 240, 100)); // Use a semi-transparent fallback base
+            // 1. Optional Base Fill (Keep or adjust as needed)
+            g2d.setColor(new Color(230, 235, 240, 80)); // Light semi-transparent base
             g2d.fillRect(0, 0, w, h);
-            // }
 
-            // 2. Draw the background image (center-cropped with alpha)
+            // 2. Draw the background image (center-cropped with alpha to COVER)
             if (backgroundImage != null) {
-                int imgW = backgroundImage.getWidth(this); // Use 'this' as observer
+                int imgW = backgroundImage.getWidth(this);
                 int imgH = backgroundImage.getHeight(this);
 
                 if (imgW > 0 && imgH > 0) { // Ensure image dimensions are valid
                     // Apply alpha composite *before* drawing image
                     g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-
-                    // Calculate center-crop scaling (Cover logic)
-                    double imgAspect = (double) imgW / imgH;
-                    double panelAspect = (double) w / h;
-                    int drawW, drawH, drawX, drawY;
-
-                    if (panelAspect > imgAspect) { // Panel wider than image: Fit height, crop width
-                        drawH = h;
-                        drawW = (int) (h * imgAspect);
-                        drawX = (w - drawW) / 2; // Center horizontally
-                        drawY = 0;
-                    } else { // Panel taller than or same aspect as image: Fit width, crop height
-                        drawW = w;
-                        drawH = (int) (w / imgAspect);
-                        drawX = 0;
-                        drawY = (h - drawH) / 2; // Center vertically
-                    }
-
                     // Use higher quality interpolation hint for scaling
                     g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                    // Draw the calculated portion of the image scaled into the panel bounds
-                    g2d.drawImage(backgroundImage, drawX, drawY, drawW, drawH, this);
+
+                    // --- START REPLACEMENT ---
+                    // Calculate scale factors to fill width and height separately
+                    double scaleX = (double) w / imgW;
+                    double scaleY = (double) h / imgH;
+
+                    // Use the *larger* scale factor to ensure the image covers the entire panel
+                    double scale = Math.max(scaleX, scaleY);
+
+                    // Calculate the new dimensions of the image after scaling
+                    int scaledW = (int) (imgW * scale);
+                    int scaledH = (int) (imgH * scale);
+
+                    // Calculate the top-left position to center the scaled image
+                    // One of these will be <= 0, effectively clipping the image
+                    int drawX = (w - scaledW) / 2;
+                    int drawY = (h - scaledH) / 2;
+
+                    // Draw the image using the calculated position and scaled dimensions
+                    // This will paint the image scaled to cover the panel bounds
+                    g2d.drawImage(backgroundImage, drawX, drawY, scaledW, scaledH, this);
+                    // --- END REPLACEMENT ---
 
                     // Reset composite to default opaque drawing for subsequent elements (like border)
                     g2d.setComposite(AlphaComposite.SrcOver);
@@ -457,15 +405,14 @@ public class PublicServerRoom extends JPanel {
                 drawErrorFallback(g2d, w, h, "Load Failed");
             }
 
-            // 3. Draw thicker black outline AFTER drawing background/image
+            // 3. Draw border AFTER background
             g2d.setColor(BORDER_COLOR);
-            g2d.setStroke(new BasicStroke(BORDER_THICKNESS));
-            // Draw slightly inside bounds to account for stroke width centering on the path
-            g2d.drawRect(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2,
-                    w - BORDER_THICKNESS, h - BORDER_THICKNESS);
+            g2d.setStroke(new BasicStroke(PublicServerRoom.ROW_BORDER_THICKNESS));
+            int inset = PublicServerRoom.ROW_BORDER_THICKNESS / 2;
+            g2d.drawRect(inset, inset, w - PublicServerRoom.ROW_BORDER_THICKNESS, h - PublicServerRoom.ROW_BORDER_THICKNESS);
 
             g2d.dispose(); // Release the graphics copy resources
-        }
+        } // End paintComponent in ImageBackgroundRowPanel
 
         // Helper to draw error state, providing more context
         private void drawErrorFallback(Graphics2D g2d, int w, int h, String errorType) {

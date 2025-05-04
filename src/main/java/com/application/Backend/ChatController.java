@@ -2,30 +2,37 @@
 package com.application.Backend;
 
 import java.awt.GridLayout;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List; // Required for List
 import java.util.Map;
-import java.util.Set; // Needed for SwingUtilities and JOptionPane
+import java.util.Set; // Required for HashSet
 
-import javax.swing.JLabel; // Needed for GridLayout
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.SwingUtilities;
 
+// Frontend imports
 import com.application.FrontEnd.ChatRoom;
 import com.application.FrontEnd.MainFrame;
+// Assuming MessageCellRenderer and its inner ChatMessage class are correctly located
+import com.application.FrontEnd.components.MessageCellRenderer;
+import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage; // Explicit import for clarity
 
 /**
  * Controller coordinating actions between the Swing UI and backend services.
+ * Manages application state, including per-room chat history.
  */
-public class ChatController implements NetworkListener {
+public class ChatController implements NetworkListener { // Ensure NetworkListener interface exists
 
     // References to UI components
     private MainFrame mainFrame;
     private ChatRoom chatRoomUI; // Null until user is in the chat room
 
-    // References to Backend services
+    // References to Backend services (Ensure these classes exist and are implemented)
     private final EncryptionService encryptionService;
     private final PusherService networkService;
 
@@ -34,32 +41,32 @@ public class ChatController implements NetworkListener {
     private String activeRoomName; // Name of the currently connected/viewed room
     private Set<String> joinedRoomNames = new HashSet<>(); // Track rooms user has joined in UI
 
+    // Store chat history per room
+    private Map<String, List<ChatMessage>> roomChatHistories = new HashMap<>();
+
+    // --- Public Room Handling ---
     private static final Map<String, String> PUBLIC_ROOM_KEYS = new HashMap<>();
     static {
-        // IMPORTANT: These keys are NOT cryptographically secure passwords.
-        // They just need to be non-empty strings for the PBKDF2 process.
-        // Use the Room *Identifier* (like "Alpha"), not the display name.
         PUBLIC_ROOM_KEYS.put("Alpha",   "PublicAlphaKey_!@#");
         PUBLIC_ROOM_KEYS.put("Bravo",   "PublicBravoKey_$%^");
         PUBLIC_ROOM_KEYS.put("Charlie", "PublicCharlieKey_*()");
         PUBLIC_ROOM_KEYS.put("Delta",   "PublicDeltaKey_-+=");
         PUBLIC_ROOM_KEYS.put("Echo",    "PublicEchoKey_{}|");
     }
-    // Helper to check if a room is public based on our map
     private boolean isPublicRoom(String roomName) {
         return PUBLIC_ROOM_KEYS.containsKey(roomName);
     }
+    // --- End Public Room Handling ---
 
     public ChatController(MainFrame mainFrame) {
-        this.mainFrame = mainFrame; // Need this to switch views
-        this.encryptionService = new EncryptionService();
-        // Pass 'this' controller as the listener for network events
-        this.networkService = new PusherService(this);
+        this.mainFrame = mainFrame;
+        this.encryptionService = new EncryptionService(); // Ensure constructor works
+        this.networkService = new PusherService(this); // Ensure constructor accepts NetworkListener
         System.out.println("[Controller] Initialized.");
     }
 
     /**
-     * Called by LoginPage when the user attempts to join or create a room.
+     * Called by LoginPage for initial join. Switches UI and delegates connection.
      */
     public void joinInitialRoom(String username, String roomName, String password) {
         System.out.println("[Controller] Initial Join attempt: user=" + username + ", room=" + roomName);
@@ -68,49 +75,40 @@ public class ChatController implements NetworkListener {
             return;
         }
         this.currentUsername = username;
-
-        // Switch UI first, then attempt connection
-        mainFrame.switchToChatRoom(this.currentUsername, roomName);
-
-        // Now that UI is switched, MainFrame should have called setActiveChatRoomUI.
-        // Now, delegate actual room joining logic.
-        joinOrSwitchToRoom(roomName, password);
+        mainFrame.switchToChatRoom(this.currentUsername, roomName); // UI switch first
+        joinOrSwitchToRoom(roomName, password); // Backend connection/switch
     }
+
+    /**
+     * Called by PublicServerRoom for public room join. Switches UI and delegates connection.
+     */
     public void joinPublicRoom(String username, String roomName) {
         System.out.println("[Controller] PUBLIC Room Join attempt: user=" + username + ", room=" + roomName);
-        // Validation: Only check username and room name
         if (username.isEmpty() || roomName.isEmpty()) {
             showErrorDialog("Username and Room Name cannot be empty.");
             return;
         }
-        // Check if it's a known public room (it should be if called from PublicServerRoom)
         if (!isPublicRoom(roomName)) {
             showErrorDialog("Internal Error: Unknown public room '" + roomName + "'.");
             return;
         }
         this.currentUsername = username;
-
-        // Switch UI first
-        mainFrame.switchToChatRoom(this.currentUsername, roomName);
-
-        // Retrieve the predefined key/password for this public room
+        mainFrame.switchToChatRoom(this.currentUsername, roomName); // UI switch first
         String predefinedPassword = PUBLIC_ROOM_KEYS.get(roomName);
-
-        // Delegate joining logic using the predefined password
-        joinOrSwitchToRoom(roomName, predefinedPassword);
+        if (predefinedPassword == null) {
+             showErrorDialog("Internal Error: Missing key for public room '" + roomName + "'.");
+             return;
+        }
+        joinOrSwitchToRoom(roomName, predefinedPassword); // Backend connection/switch
     }
 
     /**
-     * Called by ChatRoom when the user clicks the Send button or presses Enter.
+     * Called by ChatRoom to send a message. Encrypts and sends via network service.
      */
     public void sendMessage(String plainTextMessage) {
-        if (plainTextMessage == null || plainTextMessage.trim().isEmpty()) {
-            return; // Don't send empty messages
-        }
+        if (plainTextMessage == null || plainTextMessage.trim().isEmpty()) return;
         if (!networkService.isConnected() || activeRoomName == null) {
-            // More specific error message based on state
-            String errorMsg = activeRoomName == null ? "Not connected to any room." :
-                             "Not connected to room '" + activeRoomName + "'.";
+            String errorMsg = activeRoomName == null ? "Not connected to any room." : "Not connected to room '" + activeRoomName + "'.";
             showErrorDialog(errorMsg + " Cannot send message.");
             return;
         }
@@ -118,24 +116,17 @@ public class ChatController implements NetworkListener {
             showErrorDialog("Internal error: Username not set.");
             return;
         }
-
         System.out.println("[Controller] Sending message: " + plainTextMessage);
         try {
-            // 1. Encrypt message using the derived room key
             String encryptedBase64 = encryptionService.encrypt(plainTextMessage);
+            // Ensure MessageData class exists and constructor matches
             MessageData messageData = new MessageData(this.currentUsername, encryptedBase64);
-            System.out.println("[Controller] Attempting to send message to room: " + activeRoomName + " on channel: " + networkService.getChannelName());
-
-            // Send via Network Service (uses its current channelName)
+            System.out.println("[Controller] Attempting send to room: " + activeRoomName + ", channel: " + networkService.getChannelName());
             boolean sendInitiated = networkService.sendChatMessage(messageData);
-
             if (!sendInitiated) {
-                 // PusherService might return false if e.g., client isn't authorized yet or other issues
                  showErrorDialog("Failed to initiate sending message (Network error). Please try again.");
             } else {
-                 // Local echo removed. Message will appear when received back from network.
                  System.out.println("[Controller] Message send initiated successfully.");
-                 // chatRoomUI.appendMessage(currentUsername, plainTextMessage); // REMOVED LOCAL ECHO
             }
         } catch (Exception e) {
             System.err.println("[Controller] Error encrypting/sending message: " + e.getMessage());
@@ -143,22 +134,17 @@ public class ChatController implements NetworkListener {
             showErrorDialog("Error sending message: " + e.getMessage());
         }
     }
+
+    /**
+     * Called by ChatRoom leave button. Disconnects, clears all state, switches UI to login.
+     */
     public void leaveRoom() {
         System.out.println("[Controller] User '" + (currentUsername != null ? currentUsername : "Unknown") + "' initiated leaving.");
-
-        // Optional: Display a leaving message in the chat UI *before* disconnecting fully
-        // Requires chatRoomUI to be non-null at this point.
         if (chatRoomUI != null && currentUsername != null) {
-            // This message will only be seen locally as we disconnect immediately after.
-            // For a networked message, send it via sendMessage *before* calling disconnect.
             chatRoomUI.displaySystemMessage(currentUsername + " is leaving the application.");
-        } else if (currentUsername == null) {
-            System.out.println("[Controller] Cannot display leaving message: currentUsername is null.");
-        } else { // chatRoomUI is null
-            System.out.println("[Controller] Cannot display leaving message: chatRoomUI is null.");
+        } else {
+            System.out.println("[Controller] Cannot display leaving message: currentUsername=" + currentUsername + ", chatRoomUI=" + (chatRoomUI != null));
         }
-
-        // Disconnect the network service
         if (networkService != null) {
             System.out.println("[Controller] Disconnecting network service...");
             networkService.disconnect();
@@ -167,17 +153,16 @@ public class ChatController implements NetworkListener {
             System.out.println("[Controller] Network service is null, cannot disconnect.");
         }
 
-        // Clear sensitive state *after* potential UI message and disconnect call
+        // Clear state *after* potential UI message and disconnect call
         this.currentUsername = null;
         this.activeRoomName = null;
-        this.chatRoomUI = null; // Release UI reference AFTER using it potentially
+        this.chatRoomUI = null;
         joinedRoomNames.clear();
+        roomChatHistories.clear(); // Clear stored history
         // encryptionService.clearKeys(); // If applicable
 
         System.out.println("[Controller] State cleared. Switching to login page.");
-        // Switch UI back to login page
         if (mainFrame != null) {
-            // Ensure UI updates happen on the EDT
             SwingUtilities.invokeLater(() -> mainFrame.switchToLoginPage());
         } else {
             System.err.println("[Controller] MainFrame reference is null, cannot switch to login page.");
@@ -185,229 +170,282 @@ public class ChatController implements NetworkListener {
     }
 
     /**
-     * Called by MainFrame's WindowListener when the application window is closing.
-     * Performs cleanup, focusing on network disconnection.
+     * Handles application shutdown cleanup (network disconnect).
      */
     public void handleApplicationShutdown() {
         System.out.println("[Controller] Application shutdown requested.");
         if (networkService != null && networkService.isConnected()) {
             System.out.println("[Controller] Disconnecting network service due to shutdown...");
             networkService.disconnect();
-            // Give a very brief moment for disconnect message to potentially send/process
             try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             System.out.println("[Controller] Network service disconnect requested during shutdown.");
         } else if (networkService != null) {
             System.out.println("[Controller] Network service already disconnected or null during shutdown.");
         }
         System.out.println("[Controller] Shutdown cleanup complete.");
-        // No UI switching needed here, the window is closing anyway.
     }
 
     /**
-     * Stores a reference to the currently active ChatRoom panel.
-     * Called by MainFrame when switching to the chat view.
-     * @param chatRoomUI The active ChatRoom instance.
+     * Sets the reference to the active ChatRoom UI instance. Called by MainFrame.
      */
     public void setActiveChatRoomUI(ChatRoom chatRoomUI) {
         this.chatRoomUI = chatRoomUI;
+        // Check if already connected to the room when UI becomes active
         if (this.chatRoomUI != null) {
-             // If we are already connected to the active room when UI is set,
-             // display the connection message immediately.
-             // Check if service is connected AND the channel name corresponds to the active room
              if (networkService.isConnected() && activeRoomName != null &&
                  networkService.getChannelName() != null &&
-                 networkService.getChannelName().contains(activeRoomName)) { // Simple check
+                 networkService.getChannelName().contains(activeRoomName)) {
                 this.chatRoomUI.displaySystemMessage("[System] Connected to room: " + activeRoomName);
              }
         }
     }
 
-    // --- Main Logic for Joining/Switching Backend Connection ---
-    // Inside ChatController.java -> joinOrSwitchToRoom(...) method
-
+    /**
+     * Core logic for connecting/subscribing to a room channel.
+     * Disconnects previous, derives key, sets network channel, initiates connection.
+     * Notifies UI to add the visual tab immediately.
+     */
     public void joinOrSwitchToRoom(String roomName, String password) {
         System.out.println("[Controller] Attempting to join/switch backend to room: " + roomName);
-        // 1. Disconnect logic ... (remains the same)
 
-        // 2. Derive Key logic ... (remains the same)
+        if (networkService.isConnected()) {
+            System.out.println("[Controller] Disconnecting from previous room: " + activeRoomName);
+            networkService.disconnect();
+        } else {
+             System.out.println("[Controller] Not currently connected, no disconnect needed.");
+        }
+
+        System.out.println("[Controller] Deriving key for room: " + roomName);
         if (!encryptionService.deriveRoomKey(roomName, password)) {
-            // Error handling...
+            showErrorDialog("Failed to derive key for room '" + roomName + "'. Check password.");
+            // If key fails, we are effectively not in any room
+            this.activeRoomName = null;
+            // Could potentially tell UI to reset highlighting if needed
             return;
         }
-        System.out.println("[Controller] Key derived successfully for room: " + roomName); // Last log seen
+        System.out.println("[Controller] Key derived successfully for room: " + roomName);
 
-        // --- BEGIN Network Setup ---
-        try { // Add try-catch for immediate issues
-            this.activeRoomName = roomName; // Update active room *before* connecting
-            System.out.println("[Controller] >> Setting activeRoomName to: " + this.activeRoomName); // ADDED LOG
+        try {
+            this.activeRoomName = roomName; // Update active room STATE before connecting
+            System.out.println("[Controller] >> Set activeRoomName to: " + this.activeRoomName);
 
-            System.out.println("[Controller] >> Calling networkService.setChannelName with: " + roomName); // ADDED LOG
-            networkService.setChannelName(roomName);
-            System.out.println("[Controller] >> networkService.getChannelName() returned: " + networkService.getChannelName()); // ADDED LOG (Verify result)
+            networkService.setChannelName(roomName); // Tell service channel name
+            String actualChannelName = networkService.getChannelName(); // Verify
+            System.out.println("[Controller] >> networkService channel name is now: " + actualChannelName);
 
-            System.out.println("[Controller] >> Calling networkService.connect()"); // ADDED LOG
-            networkService.connect(); // Start async connection
-            System.out.println("[Controller] >> networkService.connect() called."); // ADDED LOG
+            if (actualChannelName == null || !actualChannelName.contains(roomName)) {
+                 System.err.println("[Controller] !!! Channel name error after setting! Expected containing '" + roomName + "', got '" + actualChannelName + "'. Aborting connect.");
+                 showErrorDialog("Internal error setting up network channel for room '" + roomName + "'.");
+                 this.activeRoomName = null; // Revert active room state
+                 return;
+            }
+
+            System.out.println("[Controller] >> Calling networkService.connect() for channel: " + actualChannelName);
+            networkService.connect(); // Initiate asynchronous connection
+            System.out.println("[Controller] >> networkService.connect() called.");
 
         } catch (Exception e) {
-            System.err.println("[Controller] !!! UNEXPECTED ERROR during network setup in joinOrSwitchToRoom: " + e.getMessage());
+            System.err.println("[Controller] !!! UNEXPECTED ERROR during network setup: " + e.getMessage());
             e.printStackTrace();
-            showErrorDialog("Internal error during network setup.");
-            return; // Don't proceed if setup fails
+            showErrorDialog("Internal error during network setup: " + e.getMessage());
+             this.activeRoomName = null; // Revert active room state
+            return;
         }
-        // --- END Network Setup ---
 
-
-        // 4. Update UI logic ... (remains the same)
-        System.out.println("[Controller] Successfully initiated switch logic for room: " + roomName + ". Waiting for connection events..."); // MODIFIED LOG
+        // Add the visual tab immediately for user feedback
+        if (chatRoomUI != null) {
+            if (!joinedRoomNames.contains(roomName)) {
+                System.out.println("[Controller] Notifying UI to add visual tab for: " + roomName);
+                chatRoomUI.addRoomTab(roomName);
+                joinedRoomNames.add(roomName);
+            } else {
+                 System.out.println("[Controller] UI tab for " + roomName + " already exists/tracked.");
+            }
+            // DO NOT call updateUIForRoomSwitch here; wait for onConnected confirmation.
+        } else {
+            System.err.println("[Controller] Cannot add room tab immediately: chatRoomUI reference is null!");
+        }
+        System.out.println("[Controller] Successfully initiated join/switch logic for room: " + roomName + ". Waiting for connection events...");
     }
 
-    // --- Handling UI request to switch --- (Needs Password!)
+    /**
+     * Handles UI request (tab click) to switch view to an already joined room.
+     * Uses predefined key for public rooms, prompts for password for private rooms.
+     */
     public void requestRoomSwitch(String targetRoomName) {
-         System.out.println("[Controller] UI requests switch to room: " + targetRoomName);
-         if (targetRoomName.equals(this.activeRoomName)) {
-             System.out.println("[Controller] Already in room: " + targetRoomName);
-             return; // No switch needed
+         System.out.println("[Controller] UI requested switch to room: " + targetRoomName);
+         // Avoid unnecessary switching if already connected to the target room
+         if (targetRoomName.equals(this.activeRoomName) && networkService.isConnected()) {
+             System.out.println("[Controller] Already connected to room: " + targetRoomName + ". Switch request ignored.");
+             // Ensure UI is correctly highlighted just in case
+             if(chatRoomUI != null) SwingUtilities.invokeLater(() -> chatRoomUI.updateUIForRoomSwitch(targetRoomName));
+             return;
          }
 
-         // ** Need password for the target room to derive key **
-         // Simple approach: Re-prompt the user every time they switch.
-         JPasswordField passwordField = new JPasswordField(15);
-         JPanel panel = new JPanel(new GridLayout(0,1));
-         panel.add(new JLabel("Enter password for room: " + targetRoomName));
-         panel.add(passwordField);
-
-        // Ensure dialog is shown on EDT
-        SwingUtilities.invokeLater(() -> {
-            // Set focus to password field for better UX
-            passwordField.requestFocusInWindow();
-
-            int result = JOptionPane.showConfirmDialog(mainFrame, panel, "Enter Room Password",
-                                                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-
-            if (result == JOptionPane.OK_OPTION) {
-                 char[] passwordChars = passwordField.getPassword();
-                 String password = new String(passwordChars);
-                 java.util.Arrays.fill(passwordChars, ' '); // Clear temp password ASAP
-
-                 if (!password.isEmpty()) {
-                      // Now proceed with the actual switch logic
-                      System.out.println("[Controller] Password received for " + targetRoomName + ". Proceeding with switch.");
-                      joinOrSwitchToRoom(targetRoomName, password);
-                 } else {
-                      showErrorDialog("Password cannot be empty.");
-                 }
-             } else {
-                 System.out.println("[Controller] Room switch cancelled by user for room: " + targetRoomName);
-                 // If switch is cancelled, UI still shows the old room.
-                 // Might need to reset the visual tab highlighting if it was optimistically set.
-                 if (chatRoomUI != null && activeRoomName != null) {
-                    chatRoomUI.updateUIForRoomSwitch(activeRoomName); // Force UI update to correct tab highlight
-                 }
-             }
-        });
+         if (isPublicRoom(targetRoomName)) {
+             System.out.println("[Controller] Switching to public room '" + targetRoomName + "' using predefined key.");
+             String predefinedPassword = PUBLIC_ROOM_KEYS.get(targetRoomName);
+              if (predefinedPassword == null) {
+                 showErrorDialog("Internal Error: Missing key for public room '" + targetRoomName + "'.");
+                 return;
+              }
+              joinOrSwitchToRoom(targetRoomName, predefinedPassword); // Use main switch logic
+         } else {
+             // Private room: Prompt for password
+             JPasswordField passwordField = new JPasswordField(15);
+             JPanel panel = new JPanel(new GridLayout(0,1));
+             panel.add(new JLabel("Enter password for room: " + targetRoomName));
+             panel.add(passwordField);
+             SwingUtilities.invokeLater(() -> { // Show dialog on EDT
+                 passwordField.requestFocusInWindow();
+                 int result = JOptionPane.showConfirmDialog(mainFrame, panel, "Enter Room Password", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                 if (result == JOptionPane.OK_OPTION) {
+                      char[] passwordChars = passwordField.getPassword();
+                      String password = new String(passwordChars);
+                      java.util.Arrays.fill(passwordChars, ' ');
+                      if (!password.isEmpty()) {
+                           System.out.println("[Controller] Password received for " + targetRoomName + ". Proceeding with switch.");
+                           joinOrSwitchToRoom(targetRoomName, password); // Use main switch logic
+                      } else {
+                           showErrorDialog("Password cannot be empty.");
+                           // Revert highlight back to original active room if password entry failed
+                           if (chatRoomUI != null && activeRoomName != null) { chatRoomUI.updateUIForRoomSwitch(activeRoomName); }
+                      }
+                  } else {
+                      System.out.println("[Controller] Room switch cancelled by user for room: " + targetRoomName);
+                      // Revert highlight back to original active room if user cancelled
+                      if (chatRoomUI != null && activeRoomName != null) { chatRoomUI.updateUIForRoomSwitch(activeRoomName); }
+                  }
+             });
+         }
     }
 
     // --- NetworkListener Implementation ---
-    // These methods are called by PusherService on its thread.
-    // UI updates MUST be dispatched to the Swing Event Dispatch Thread (EDT).
 
     @Override
     public void onConnected() {
-        // Called when connection to Pusher channel is successful
-        String connectedChannel = networkService.getChannelName(); // Get the actual channel connected to
+        final String connectedChannel = networkService.getChannelName(); // Capture final variable for lambda
         System.out.println("[Controller] Network Listener: Connected event received for channel: " + connectedChannel);
-        if (chatRoomUI != null && activeRoomName != null) {
-            // Verify the connection is for the room we intended to connect to
-            // Check if the connected channel name contains the active room name.
-            // This relies on PusherService using the room name predictably in the channel name.
-            if(connectedChannel != null && connectedChannel.contains(activeRoomName)) {
-                System.out.println("[Controller] Confirmed connection to the active room: " + activeRoomName);
-                chatRoomUI.displaySystemMessage("[System] Connected to room: " + activeRoomName);
-                // Potentially enable input fields here if they were disabled during switch
+        SwingUtilities.invokeLater(() -> { // Ensure UI updates are on EDT
+            if (chatRoomUI != null && activeRoomName != null) {
+                // Check if the connection is for the room we currently think is active
+                if (connectedChannel != null && connectedChannel.contains(activeRoomName)) {
+                    System.out.println("[Controller] Confirmed connection to the active room: " + activeRoomName);
+                    // Connection confirmed, NOW update the main UI view (highlight, clear chat, load history)
+                    System.out.println("[Controller] Notifying UI to update view for connection to: " + activeRoomName);
+                    chatRoomUI.updateUIForRoomSwitch(activeRoomName);
+                } else {
+                    System.err.println("[Controller] Network Listener: Connected event for unexpected channel '" + connectedChannel + "'. Expected channel containing '" + activeRoomName + "'. State mismatch?");
+                    chatRoomUI.displaySystemMessage("[Warning] Connected to network channel: " + connectedChannel);
+                    // Decide how to handle mismatch - maybe force UI to reflect actual connection?
+                }
             } else {
-                System.err.println("[Controller] Network Listener: Connected event for unexpected channel '" + connectedChannel + "'. Expected channel containing '" + activeRoomName + "'.");
-                 // This indicates a potential state mismatch or issue in channel naming/reporting.
-                 chatRoomUI.displaySystemMessage("[System] Network connected (Channel: " + connectedChannel +")"); // Show generic message maybe
+                 System.out.println("[Controller] Network Listener: Connected event ignored, UI or active room is null/changed. UI State: " + (chatRoomUI != null) + ", Active Room: " + activeRoomName);
             }
-        } else {
-             System.out.println("[Controller] Network Listener: Connected event received, but UI or active room is null. UI State: " + (chatRoomUI != null) + ", Active Room: " + activeRoomName);
-        }
+        });
     }
 
     @Override
     public void onDisconnected() {
         System.out.println("[Controller] Network Listener: Disconnected!");
-        // This could happen intentionally (switching rooms) or unintentionally (network drop)
-        // Avoid showing error dialog if disconnect was intentional (e.g., during a switch)
-        // Need more state tracking to differentiate. For now, show a generic message.
-        if (chatRoomUI != null) {
-           chatRoomUI.displaySystemMessage("[System] Disconnected from chat service.");
-           // Optionally disable input fields?
-           // chatRoomUI.setInputEnabled(false); // Assuming such a method exists
-        }
-        // Don't show a pop-up error here, as it might interrupt a room switch flow.
-        // showErrorDialog("Disconnected from chat service.");
+         SwingUtilities.invokeLater(() -> { // Ensure UI updates are on EDT
+            if (chatRoomUI != null) {
+               chatRoomUI.displaySystemMessage("[System] Disconnected from chat service.");
+               // Potentially disable input fields etc.
+            }
+        });
     }
 
     @Override
-    public void onMessageReceived(MessageData messageData) {
+    public void onMessageReceived(final MessageData messageData) { // Ensure MessageData class exists
         if (messageData == null || messageData.sender == null || messageData.encryptedData == null) {
              System.err.println("[Controller] Network Listener: Received invalid MessageData.");
-            return;
+             return;
         }
-        System.out.println("[Controller] Network Listener: Encrypted message received from " + messageData.sender);
-
-        // ** Only process message if it's for the currently ACTIVE room **
-        // We infer this because we are only SUBSCRIBED to the active room's channel.
-        // So any message arriving *must* be for the active room.
+        // Process only if we know which room is active
+        final String roomForMessage = this.activeRoomName; // Capture current active room
+        if (roomForMessage == null) {
+             System.err.println("[Controller] Message received but no active room set. Ignoring.");
+             return;
+        }
+        // Assume messages only arrive for the currently ACTIVE (subscribed) room
+        System.out.println("[Controller] Network Listener: Encrypted message received from " + messageData.sender + " for active room " + roomForMessage);
 
         try {
-            // Decrypt using the key derived for the *activeRoomName*
-            String decryptedText = encryptionService.decrypt(messageData.encryptedData);
+            // Decryption must happen off the EDT if potentially slow
+            final String decryptedText = encryptionService.decrypt(messageData.encryptedData);
             System.out.println("[Controller] Decrypted message from " + messageData.sender + ": " + decryptedText);
-            // Update the ChatRoom UI (guaranteed to be the correct room's UI)
-            if (chatRoomUI != null) {
-                chatRoomUI.appendMessage(messageData.sender, decryptedText);
-            } else {
-                 System.err.println("[Controller] chatRoomUI is null when message received. Cannot display.");
-            }
+
+            // Create the ChatMessage object
+            final ChatMessage chatMessage = new ChatMessage(messageData.sender, decryptedText);
+
+            // Add to the history map for the room the message belongs to
+            // Use computeIfAbsent in a thread-safe manner if accessed by multiple threads,
+            // but here it's likely okay if only modified from network thread + controller methods
+             synchronized(roomChatHistories) { // Basic synchronization if needed
+                 roomChatHistories.computeIfAbsent(roomForMessage, k -> new ArrayList<>()).add(chatMessage);
+             }
+            System.out.println("[Controller] Added message to history map for room: " + roomForMessage);
+
+            // Update UI on EDT
+            SwingUtilities.invokeLater(() -> {
+                // Double check if the UI is still active and showing the SAME room
+                if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                    // Pass strings to match existing appendMessage signature
+                    chatRoomUI.appendMessage(chatMessage.getSender(), chatMessage.getMessage());
+                } else {
+                    System.out.println("[Controller] Message for room '" + roomForMessage + "' received, but UI is not active or shows different room ('"+this.activeRoomName+"'). Message stored, not displayed immediately.");
+                    // Optionally add unread indicator to the room tab here?
+                }
+            });
+
         } catch (Exception e) {
             System.err.println("[Controller] Failed decrypt message from " + messageData.sender + ": " + e.getMessage());
-            // Show error in chat area instead of dialog to be less intrusive
-             if (chatRoomUI != null) {
-                  // Ensure system messages are clearly marked
-                  chatRoomUI.displaySystemMessage("[Error] Could not decrypt message from " + messageData.sender + ".");
-             }
-            // Don't show a blocking dialog for every failed decryption
+             // Update UI on EDT
+             SwingUtilities.invokeLater(() -> {
+                if (chatRoomUI != null) {
+                    chatRoomUI.displaySystemMessage("[Error] Could not decrypt message from " + messageData.sender + ".");
+                }
+             });
         }
     }
 
     @Override
-    public void onError(String message, Exception e) { // Unchanged in logic, but use displaySystemMessage
+    public void onError(final String message, final Exception e) {
         System.err.println("[Controller] Network Listener: Error: " + message + (e != null ? " - " + e.getMessage() : ""));
-         if (chatRoomUI != null) {
-             chatRoomUI.displaySystemMessage("[Network Error] " + message);
-         } else {
-            // If UI not available, show popup as fallback
-            showErrorDialog("Network Error: " + message);
-         }
+        // Update UI on EDT
+         SwingUtilities.invokeLater(() -> {
+             if (chatRoomUI != null) {
+                 chatRoomUI.displaySystemMessage("[Network Error] " + message);
+             } else {
+                // Show popup only if UI isn't available (less intrusive)
+                showErrorDialog("Network Error: " + message);
+             }
+         });
          if (e != null) {
              e.printStackTrace(); // Log stack trace for debugging
          }
     }
 
     // --- UI Utility Methods ---
-
     private void showErrorDialog(String message) {
-         // Ensure dialog is shown on the Event Dispatch Thread
          SwingUtilities.invokeLater(() -> {
-             JOptionPane.showMessageDialog(
-                 mainFrame, // Parent component
-                 message,
-                 "Error", // Dialog title
-                 JOptionPane.ERROR_MESSAGE
-             );
+             JOptionPane.showMessageDialog(mainFrame, message, "Error", JOptionPane.ERROR_MESSAGE);
          });
+    }
+
+    // --- Getter for chat history ---
+    /**
+     * Retrieves the stored chat history for a specific room.
+     * Returns a defensive copy or ensure thread safety if accessed across threads.
+     * @param roomName The name of the room.
+     * @return A List of ChatMessage objects, or an empty list if no history exists.
+     */
+    public List<ChatMessage> getChatHistory(String roomName) {
+         synchronized(roomChatHistories) { // Synchronize access
+             // Return a defensive copy to prevent modification of the internal list by the UI
+             return new ArrayList<>(roomChatHistories.getOrDefault(roomName, List.of())); // Use List.of() for empty immutable list if Java 9+
+             // Or for older Java: return new ArrayList<>(roomChatHistories.getOrDefault(roomName, Collections.emptyList()));
+         }
     }
 }
