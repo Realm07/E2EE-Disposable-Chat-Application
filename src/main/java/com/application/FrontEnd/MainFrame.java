@@ -16,6 +16,7 @@ public class MainFrame extends JFrame {
     private PublicServerRoom publicServerRoom;
     private PrivateRoomPage privateRoomPage; // Added
     private ChatController chatController; // Add reference to the controller
+    private InfoPage infoPage;
     public static Font sansationRegular; // Make fonts accessible
     public static Font sansationBold;
 
@@ -146,6 +147,20 @@ public class MainFrame extends JFrame {
         add(privateRoomPage);
         revalidate();
         repaint();
+    }
+
+    public void switchToInfoPage(){
+        System.out.println("[MainFrame] Switching to Information panel.");
+        if(loginPage != null){
+            remove(loginPage);
+            loginPage = null;
+        }
+
+        infoPage = new InfoPage(this);
+        add(infoPage);
+
+        revalidate();
+        repaint(); 
     }
 
     private static void loadCustomFonts() {

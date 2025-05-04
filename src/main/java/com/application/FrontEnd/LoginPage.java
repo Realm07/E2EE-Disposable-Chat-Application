@@ -20,20 +20,17 @@ import javax.swing.border.Border; // Import Border
 import javax.swing.border.CompoundBorder; // Import CompoundBorder
 import javax.swing.border.EmptyBorder;
 
-/**
- * Login Page UI with layered background image (BG_LoginPage.jpg), logo,
- * username input, and buttons for Public/Private Rooms.
- */
+
 public class LoginPage extends JPanel {
 
     // --- UI Components ---
     private CustomTextField userNameField;
-    private CustomButton publicRoomButton; // Re-added
-    private CustomButton privateRoomButton;// Re-added
-    private JButton infoButton;            // Top-left 'i' icon button
+    private CustomButton publicRoomButton; 
+    private CustomButton privateRoomButton;
+    private JButton infoButton;            
     private JLabel aboutLabel;
     private JLabel versionLabel;
-    private JPanel formPanel;              // Panel holding centered form elements
+    private JPanel formPanel;              
 
     // --- References ---
     private MainFrame mainFrame;
@@ -47,21 +44,17 @@ public class LoginPage extends JPanel {
     private static final String BACKGROUND_IMAGE_PATH = "/com/application/FrontEnd/images/BG_LoginPage.jpg"; // Correct JPG background
     private static final String LOGO_IMAGE_PATH = "/com/application/FrontEnd/images/ICON_Logo.png";
     private static final String INFO_ICON_PATH = "/com/application/FrontEnd/images/ICON_Info.png"; // 'i' icon path
-    // No submit arrow needed private static final String SUBMIT_ICON_PATH = "/com/application/FrontEnd/images/ICON_Front.png";
 
     // --- Constructor ---
     public LoginPage(MainFrame mainFrame, ChatController chatController) {
         this.mainFrame = mainFrame;
         this.chatController = chatController;
 
-        // Main panel uses BorderLayout to hold the LayeredPane
         setLayout(new BorderLayout());
 
-        // Initialize LayeredPane for background/foreground separation
         layeredPane = new JLayeredPane();
         add(layeredPane, BorderLayout.CENTER);
 
-        // Initialize and add Background Panel (Bottom Layer)
         backgroundPanel = new BackgroundImagePanel(BACKGROUND_IMAGE_PATH);
         layeredPane.add(backgroundPanel, JLayeredPane.DEFAULT_LAYER); // Layer 0
 
@@ -73,7 +66,7 @@ public class LoginPage extends JPanel {
         infoButton = createIconButton(INFO_ICON_PATH, "i", "Info");
         layeredPane.add(infoButton, JLayeredPane.MODAL_LAYER); // Layer ~200
 
-        versionLabel = new JLabel("v1.0.0");
+        versionLabel = new JLabel("v1.0.5");
         versionLabel.setForeground(Color.DARK_GRAY); // Style as before
         versionLabel.setFont(MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(10f) : new Font("SansSerif", Font.BOLD, 10));
         layeredPane.add(versionLabel, JLayeredPane.MODAL_LAYER);
@@ -174,7 +167,7 @@ public class LoginPage extends JPanel {
         aboutLabel.setFont(MainFrame.sansationRegular.deriveFont(14f));
         aboutLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         aboutLabel.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent e) { showInfoDialog(); }
+            @Override public void mouseClicked(MouseEvent e) { mainFrame.switchToInfoPage(); }
         });
         gbc.gridy = 5; gbc.insets = new Insets(10, 10, 10, 10);
         gbc.weighty = 1.0; // Take up remaining vertical space below

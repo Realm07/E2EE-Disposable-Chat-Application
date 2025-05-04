@@ -7,7 +7,12 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
+import java.awt.Image;
+import java.awt.RenderingHints;
 import java.awt.event.ActionListener;
 import java.util.HashMap;
 import java.util.Map; // Needed for maps
@@ -16,7 +21,10 @@ import java.util.Random;   // Needed for maps
 import javax.swing.BorderFactory; // Needed for button colors
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.DefaultListModel;
+import javax.swing.ImageIcon;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
@@ -24,6 +32,7 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
+import javax.swing.ListSelectionModel;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -32,26 +41,25 @@ import javax.swing.border.Border;
 import javax.swing.border.TitledBorder;
 
 import com.application.Backend.ChatController;
-import com.application.FrontEnd.components.CustomButton;
-import com.application.FrontEnd.components.CustomLabel;
-import com.application.FrontEnd.components.CustomTextArea;
-import com.application.FrontEnd.components.CustomTextField;
+import com.application.FrontEnd.components.*;
 
 public class ChatRoom extends JPanel {
 
     // --- UI Components (Style based on snippet) ---
     private CustomButton sendButton;
     private CustomButton leaveRoomButton;
-    private CustomTextArea chatArea;
+    
     private CustomTextField chatTextField;
     private CustomLabel roomNameLabel;
     private CustomTextArea userNameArea;
     private JPanel roomTabPanel;
     private CustomButton addNewRoomButton;
-    private CustomButton emojiButton; // Renamed from EmojiButton
-    private CustomButton fileSendButton; // Renamed from FileSendButton
+    private CustomButton emojiButton; 
+    private CustomButton fileSendButton; 
 
-    // --- References & State (Keep existing) ---
+    private JList<MessageCellRenderer.ChatMessage> chatList; 
+    private DefaultListModel<MessageCellRenderer.ChatMessage> chatListModel;
+
     private MainFrame mainFrame;
     private ChatController chatController;
     private String currentUserName;
@@ -71,6 +79,15 @@ public class ChatRoom extends JPanel {
         this.roomChatHistory.put(initialRoomName, "");
         this.roomButtons = new HashMap<>();
 
+        this.chatListModel = new DefaultListModel<MessageCellRenderer.ChatMessage>(); 
+        this.chatList = new JList<>(this.chatListModel); 
+        chatList.setCellRenderer(new MessageCellRenderer());
+
+        chatList.setBackground(new Color(60, 60, 60)); // Match old background
+        chatList.setOpaque(true);
+        chatList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); // Or disable selection
+        chatList.setFocusable(false);
+
         // --- UI Initialization (Adopt snippet's layout) ---
         Color backgroundColor = new Color(45, 45, 45); // Snippet's background
         this.setBackground(backgroundColor);
@@ -84,7 +101,7 @@ public class ChatRoom extends JPanel {
         userDisplayPanel.setOpaque(false);
 
         // Room Name Label (Snippet style)
-        roomNameLabel = new CustomLabel(initialRoomName, 200, 30);
+        roomNameLabel = new CustomLabel("Room: "+initialRoomName, 200, 30);
         roomNameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         roomNameLabel.setHorizontalAlignment(SwingConstants.CENTER);
         roomNameLabel.setForeground(new Color(200, 200, 200));
@@ -140,19 +157,12 @@ public class ChatRoom extends JPanel {
         chatPanel.setOpaque(false);
         chatPanel.setBorder(BorderFactory.createEmptyBorder(0, 5, 5, 5)); // Snippet border
 
-        // Chat Area (Snippet style)
-        chatArea = new CustomTextArea(null);
-        chatArea.setBackground(new Color(60, 60, 60));
-        chatArea.setForeground(new Color(230, 230, 230));
-        chatArea.setEditable(false);
-        chatArea.setLineWrap(true);
-        chatArea.setWrapStyleWord(true);
-
-        JScrollPane chatScrollPane = new JScrollPane(chatArea);
+        JScrollPane chatScrollPane = new JScrollPane(chatList);
         chatScrollPane.setOpaque(false);
         chatScrollPane.getViewport().setOpaque(false);
         chatScrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
         chatScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        chatScrollPane.setBorder(BorderFactory.createEmptyBorder());
 
         // Custom Border for Chat History (Snippet style)
         Border chatBorder = BorderFactory.createTitledBorder(
@@ -231,8 +241,8 @@ public class ChatRoom extends JPanel {
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setRightComponent(rightColumnPanel); // Use the renamed right panel
         splitPane.setLeftComponent(chatPanel);
-        splitPane.setDividerLocation(600); // Use existing value or snippet's
-        splitPane.setResizeWeight(0.8); // Adjust resize weight if needed (snippet used 0.5)
+        splitPane.setDividerLocation(800); // Use existing value or snippet's
+        splitPane.setResizeWeight(0.2); // Adjust resize weight if needed (snippet used 0.5)
         splitPane.setOpaque(false);
         splitPane.setContinuousLayout(true); // Keep existing setting
         splitPane.setBorder(null);
@@ -240,36 +250,38 @@ public class ChatRoom extends JPanel {
         // Add split pane to the main panel
         add(splitPane, BorderLayout.CENTER);
 
-        // Load initial chat history (Keep existing)
-        chatArea.setText(roomChatHistory.getOrDefault(this.activeRoomName, ""));
-
         addEventListeners(); // Add listeners AFTER all components are created
     }
 
     // --- Methods Called by Controller (Keep existing logic) ---
     public void appendMessage(String sender, String message) {
         SwingUtilities.invokeLater(() -> {
-            String fullMessage = sender + ": " + message + "\n";
-            chatArea.append(fullMessage);
-            String currentHistory = roomChatHistory.getOrDefault(activeRoomName, "");
-            roomChatHistory.put(activeRoomName, currentHistory + fullMessage);
-            chatArea.setCaretPosition(chatArea.getDocument().getLength());
+            MessageCellRenderer.ChatMessage msg = new MessageCellRenderer.ChatMessage(sender, message);
+            String fullMessage = "@" + sender+ "\n" + ":- " + message + "\n";
+            chatListModel.addElement(msg);
+            int lastIndex = chatListModel.getSize() - 1;
+            if (lastIndex >= 0) {
+            chatList.ensureIndexIsVisible(lastIndex);
+        }
         });
     }
 
     public void displaySystemMessage(String message) {
         SwingUtilities.invokeLater(() -> {
-            String fullMessage = "[System] " + message + "\n"; // Keep prefix
-            chatArea.append(fullMessage);
-            String currentHistory = roomChatHistory.getOrDefault(activeRoomName, "");
-            roomChatHistory.put(activeRoomName, currentHistory + fullMessage);
-            chatArea.setCaretPosition(chatArea.getDocument().getLength());
+            MessageCellRenderer.ChatMessage msg = new MessageCellRenderer.ChatMessage("[System]", message);
+
+            chatListModel.addElement(msg);
+
+            int lastIndex = chatListModel.getSize() - 1;
+            if (lastIndex >= 0) {
+                chatList.ensureIndexIsVisible(lastIndex);
+            }
         });
     }
 
     public void clearChatArea() {
         SwingUtilities.invokeLater(() -> {
-             chatArea.setText("");
+             chatListModel.clear();
         });
     }
 
@@ -385,8 +397,7 @@ public class ChatRoom extends JPanel {
          SwingUtilities.invokeLater(() -> {
              this.activeRoomName = newActiveRoom;
              this.setActiveRoomNameLabel(newActiveRoom);
-             this.chatArea.setText(roomChatHistory.getOrDefault(newActiveRoom, ""));
-             this.chatArea.setCaretPosition(chatArea.getDocument().getLength());
+             this.chatListModel.clear();
              System.out.println("[UI] Switched view to room : " + activeRoomName);
 
              // Update tab highlighting (Keep existing)
@@ -408,5 +419,72 @@ public class ChatRoom extends JPanel {
 
     public void setMainFrame(MainFrame frame) {
         this.mainFrame = frame;
+    }
+
+    private class BackgroundGifPanel extends JPanel {
+        private Image gifImage;
+        private String errorMessage = null;
+        private String imagePathUsed; // Store path for error messages
+
+        public BackgroundGifPanel(String imagePath) {
+            this.imagePathUsed = imagePath;
+            try {
+                java.net.URL gifUrl = getClass().getResource(imagePath);
+                if (gifUrl != null) {
+                    ImageIcon icon = new ImageIcon(gifUrl);
+                    if (icon.getIconWidth() == -1) { // Basic check if loading failed
+                         this.errorMessage = "Failed to load GIF: ImageIcon error";
+                         System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
+                         this.gifImage = null;
+                    } else {
+                        this.gifImage = icon.getImage(); // Get the Image object
+                        System.out.println("[BackgroundGifPanel] GIF Image loaded successfully from: " + imagePath);
+                    }
+                } else {
+                    this.errorMessage = "GIF resource not found";
+                    System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
+                    this.gifImage = null;
+                }
+            } catch (Exception e) {
+                this.errorMessage = "Exception loading GIF: " + e.getMessage();
+                System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
+                e.printStackTrace();
+                this.gifImage = null;
+            }
+             // Important: Set opaque false if you want things behind this panel (in the layered pane)
+             // to potentially show through (though likely not needed here as it's the bottom layer)
+             // setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g); // Paint background if opaque, handle borders etc.
+
+            if (gifImage != null) {
+                // --- Draw the image scaled to fill the panel ---
+                Graphics2D g2d = (Graphics2D) g.create();
+                // Optional: Add rendering hints for potentially better scaling quality
+                g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                // Draw the image, scaling it to the component's current width and height.
+                // Passing 'this' as the ImageObserver is crucial for animated GIFs to repaint correctly.
+                g2d.drawImage(gifImage, 0, 0, getWidth(), getHeight(), this);
+                g2d.dispose();
+                // --- End drawing ---
+            } else {
+                // Draw fallback background and error message if image failed to load
+                g.setColor(new Color(77, 0, 77)); // Dark purple fallback
+                g.fillRect(0, 0, getWidth(), getHeight());
+                g.setColor(Color.YELLOW);
+                g.setFont(new Font("SansSerif", Font.BOLD, 14));
+                String text = "BG Load Error: " + (errorMessage != null ? errorMessage : "Unknown");
+                FontMetrics fm = g.getFontMetrics();
+                int msgWidth = fm.stringWidth(text);
+                g.drawString(text, Math.max(5, (getWidth() - msgWidth) / 2) , getHeight() / 2 + fm.getAscent() / 2);
+                 String pathText = "(" + imagePathUsed + ")";
+                 msgWidth = fm.stringWidth(pathText);
+                 g.drawString(pathText, Math.max(5, (getWidth() - msgWidth) / 2) , getHeight() / 2 + fm.getAscent() / 2 + fm.getHeight());
+
+            }
+        }
     }
 }

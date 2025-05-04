@@ -273,13 +273,7 @@ public class PrivateRoomPage extends JPanel {
                 return;
             }
             System.out.println("Attempting to Create/Join room '" + roomName + "' for user '" + currentUserName + "'");
-            // TODO: Implement actual room creation logic (likely via ChatController)
-            // For now, just switch to ChatRoom UI assuming creation/join success
-            // This assumes creation automatically joins. Adjust if backend logic differs.
-            // Pass password to controller if needed for creation/initial key derivation
             mainFrame.getChatController().joinInitialRoom(currentUserName, roomName, password);
-
-            // Clear password field after use
             passwordField.setText("");
         });
 
@@ -294,21 +288,14 @@ public class PrivateRoomPage extends JPanel {
             }
 
             System.out.println("Attempting to Join room '" + roomName + "' for user '" + currentUserName + "'");
-            // TODO: Implement actual room joining logic/validation (via ChatController)
-            // For now, just switch to ChatRoom UI assuming join success
             mainFrame.getChatController().joinInitialRoom(currentUserName, roomName, password);
-
-            // Clear password field after use
             passwordField.setText("");
         });
 
-        // Optional: Pressing Enter in password field triggers Join button
         passwordField.addActionListener(e -> joinButton.doClick());
-        // Optional: Pressing Enter in room name field moves focus to password
         roomNameField.addActionListener(e -> passwordField.requestFocusInWindow());
     }
 
-    // --- Inner Class for Background Image Panel (Copied DIRECTLY from LoginPage) ---
     private static class BackgroundImagePanel extends JPanel {
         private Image backgroundImage;
         private String errorMessage = null;
