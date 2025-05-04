@@ -7,6 +7,8 @@ import java.awt.*;
 import java.io.IOException;
 import java.io.InputStream;
 import javax.swing.*;
+import java.awt.event.WindowAdapter; // Import WindowAdapter
+import java.awt.event.WindowEvent;   // Import WindowEvent
 
 public class MainFrame extends JFrame {
     private LoginPage loginPage;
@@ -20,8 +22,24 @@ public class MainFrame extends JFrame {
     public MainFrame() {
 
         chatController = new ChatController(this);
-        setTitle("AnonChat E2EE");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setTitle("AnoChat");
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                System.out.println("[MainFrame] Window closing event detected.");
+                // Perform cleanup through the controller
+                if (chatController != null) {
+                    chatController.handleApplicationShutdown();
+                } else {
+                    System.err.println("[MainFrame] ChatController is null during window closing!");
+                }
+                // Close the window
+                dispose();
+                // Ensure the application exits
+                System.exit(0);
+            }
+        });
         try {
             java.net.URL iconUrl = getClass().getResource("/com/application/FrontEnd/images/Chat_logo.png");
             if (iconUrl != null) {
@@ -95,7 +113,7 @@ public class MainFrame extends JFrame {
 
 
     public void switchToPublicRoom(String currentUserName){
-        System.out.println("[MainFrame] Switching to Public server panel");
+        System.out.println("[MainFrame] Switching to Public server panel for user: " + currentUserName);
         // Remove whatever panel is currently showing
         getContentPane().removeAll();
 
@@ -105,8 +123,8 @@ public class MainFrame extends JFrame {
         privateRoomPage = null;
         if (chatRoom != null) chatController.setActiveChatRoomUI(null); // Deactivate chat UI if switching from it
 
-
-        publicServerRoom = new PublicServerRoom(this, currentUserName);
+        // <<< Pass the controller instance >>>
+        publicServerRoom = new PublicServerRoom(this, currentUserName, this.chatController);
         add(publicServerRoom);
         revalidate();
         repaint();
@@ -128,13 +146,6 @@ public class MainFrame extends JFrame {
         add(privateRoomPage);
         revalidate();
         repaint();
-    }
-    public void switchToPrivateRoom(){
-        // This version might be called from LoginPage *before* username is finalized
-        // It's better to ensure username is passed.
-        // For now, let's assume LoginPage passes it correctly.
-        System.err.println("[MainFrame] Warning: switchToPrivateRoom() called without username. This might lead to issues.");
-        // Or, find a way to retrieve the username from LoginPage if needed, but passing is cleaner.
     }
 
     private static void loadCustomFonts() {

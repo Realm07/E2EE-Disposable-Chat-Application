@@ -13,10 +13,7 @@ import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.net.URL;
 
-// Backend/Component Imports (Adjust if needed)
-import com.application.Backend.ChatController; // Keep if controller needed later
-// Removed CustomButton/Label - using standard components styled here
-
+import com.application.Backend.ChatController;
 /**
  * UI Panel displaying the list of fixed public chat rooms, styled to match the target design.
  * Features a full-panel background image, custom header ribbon, and styled room rows
@@ -27,7 +24,7 @@ public class PublicServerRoom extends JPanel {
     // --- References ---
     private MainFrame mainFrame;
     private String currentUsername;
-    // private ChatController chatController; // Uncomment if controller needed
+    private ChatController chatController;
 
     // --- Constants ---
     // Resource Paths (Ensure these files exist in src/main/resources/com/application/FrontEnd/images/)
@@ -65,10 +62,10 @@ public class PublicServerRoom extends JPanel {
     private PageBackgroundPanel pageBackgroundPanel; // For overall BG
 
     // --- Constructor ---
-    public PublicServerRoom(MainFrame mainFrame, String username /*, ChatController controller */) {
+    public PublicServerRoom(MainFrame mainFrame, String username, ChatController controller) {
         this.mainFrame = mainFrame;
         this.currentUsername = username;
-        // this.chatController = controller;
+        this.chatController = controller;
 
         setLayout(new BorderLayout(0, 0));
         setOpaque(false); // This main panel is just a container for the layered pane
@@ -307,8 +304,11 @@ public class PublicServerRoom extends JPanel {
                 BorderFactory.createLineBorder(ROW_BUTTON_BORDER_COLOR, 1), // White border
                 BorderFactory.createEmptyBorder(8, 25, 8, 25) // Button padding
         ));
-        joinButton.addActionListener(e -> mainFrame.switchToChatRoom(currentUsername, roomIdentifier));
-
+        joinButton.addActionListener(e -> {
+            System.out.println("[PublicServerRoom] User '" + currentUsername + "' attempting to join public room: '" + roomIdentifier + "'");
+            // Call the dedicated method for public rooms - NO password passed from UI
+            chatController.joinPublicRoom(currentUsername, roomIdentifier);
+        });
         // Container panel that paints the semi-transparent green background
         JPanel buttonContainer = new JPanel(new GridBagLayout()) { // Use GBL to center button easily
             @Override

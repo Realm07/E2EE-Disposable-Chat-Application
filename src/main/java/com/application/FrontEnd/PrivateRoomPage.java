@@ -34,7 +34,7 @@ public class PrivateRoomPage extends JPanel {
     // --- Resource Paths (using LoginPage paths for consistency) ---
     // *** USE THE SAME BACKGROUND AS LOGIN PAGE ***
     private static final String BACKGROUND_IMAGE_PATH = "/com/application/FrontEnd/images/BG_PublicRooms.png";
-    private static final String BACK_ICON_PATH = "/com/application/FrontEnd/images/left-arrow.png"; // Make sure this exists
+    private static final String BACK_ICON_PATH = "/com/application/FrontEnd/images/ICON_Back.png"; // Make sure this exists
     // No logo needed here
 
     // --- Constructor ---

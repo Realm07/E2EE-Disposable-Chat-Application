@@ -205,8 +205,12 @@ public class LoginPage extends JPanel {
             if (iconUrl != null) {
                 ImageIcon icon = new ImageIcon(iconUrl);
                 if (icon.getIconWidth() > 0) {
-                    // Scale icon nicely to fit button
-                    Image scaledImage = icon.getImage().getScaledInstance(26, 26, Image.SCALE_SMOOTH);
+                    // Scale icon to fit button - CHANGE SCALING HINT HERE
+                    Image scaledImage = icon.getImage().getScaledInstance(
+                            26,                          // target width
+                            26,                          // target height
+                            Image.SCALE_SMOOTH        // <<--- Use REPLICATE for sharpness
+                    );
                     button.setIcon(new ImageIcon(scaledImage));
                 } else { throw new IOException("Icon ImageIcon invalid: " + iconPath); }
             } else { throw new IOException("Icon resource not found: " + iconPath); }
@@ -230,8 +234,12 @@ public class LoginPage extends JPanel {
             if (imgUrl != null) {
                 ImageIcon icon = new ImageIcon(imgUrl);
                 if (icon.getIconWidth() > 0) {
-                    // Scale logo based on width, maintaining aspect ratio
-                    Image scaledImage = icon.getImage().getScaledInstance(120, -1, Image.SCALE_SMOOTH); // Scale width=120
+                    // Scale logo based on width - CHANGE SCALING HINT HERE
+                    Image scaledImage = icon.getImage().getScaledInstance(
+                            120,                         // target width (-1 for height maintains aspect ratio)
+                            -1,                          // target height
+                            Image.SCALE_SMOOTH     // <<--- Use REPLICATE for sharpness
+                    );
                     label.setIcon(new ImageIcon(scaledImage));
                     // Set preferred size based on scaled icon to help layout
                     label.setPreferredSize(new Dimension(((ImageIcon)label.getIcon()).getIconWidth(), ((ImageIcon)label.getIcon()).getIconHeight()));
