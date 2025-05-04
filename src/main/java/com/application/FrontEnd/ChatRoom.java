@@ -12,6 +12,9 @@ import java.awt.event.ActionListener;
 import java.util.HashMap;
 import java.util.Map; // Needed for maps
 import java.util.Random;   // Needed for maps
+import java.util.Set;      // Import Set
+import java.util.HashSet;  // Import HashSet
+import java.util.stream.Collectors;
 
 import javax.swing.BorderFactory; // Needed for button colors
 import javax.swing.Box;
@@ -58,6 +61,7 @@ public class ChatRoom extends JPanel {
     private String activeRoomName;
     private Map<String, String> roomChatHistory;
     private Map<String, CustomButton> roomButtons;
+    private Set<String> onlineUsers;
 
     // --- Constructor (Integrate snippet's UI structure) ---
     public ChatRoom(String initialUsername, String initialRoomName, MainFrame mainFrame, ChatController chatController) {
@@ -70,6 +74,7 @@ public class ChatRoom extends JPanel {
         this.roomChatHistory = new HashMap<>();
         this.roomChatHistory.put(initialRoomName, "");
         this.roomButtons = new HashMap<>();
+        this.onlineUsers = new HashSet<>();
 
         // --- UI Initialization (Adopt snippet's layout) ---
         Color backgroundColor = new Color(45, 45, 45); // Snippet's background
@@ -95,6 +100,7 @@ public class ChatRoom extends JPanel {
         userNameArea.setForeground(new Color(220, 220, 220));
         userNameArea.setEditable(false);
         userNameArea.append("- " + this.currentUserName + " (You)\n"); // Updated text
+        userNameArea = new CustomTextArea(null);
 
         JScrollPane userScrollPane = new JScrollPane(userNameArea);
         userScrollPane.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -245,7 +251,29 @@ public class ChatRoom extends JPanel {
 
         addEventListeners(); // Add listeners AFTER all components are created
     }
+    public void addUserToList(String username) {
+        if (username == null || username.trim().isEmpty()) return;
 
+        boolean added = onlineUsers.add(username); // Add to set, check if new
+        if (added) { // Only update UI if the user wasn't already there
+            System.out.println("[UI] Adding user to list: " + username);
+            updateUserListUI();
+        } else {
+            System.out.println("[UI] User already in list: " + username);
+        }
+    }
+
+    public void removeUserFromList(String username) {
+        if (username == null || username.trim().isEmpty()) return;
+
+        boolean removed = onlineUsers.remove(username); // Remove from set
+        if (removed) { // Only update UI if the user was actually there
+            System.out.println("[UI] Removing user from list: " + username);
+            updateUserListUI();
+        } else {
+            System.out.println("[UI] User not found in list to remove: " + username);
+        }
+    }
     // --- Methods Called by Controller (Keep existing logic) ---
     public void appendMessage(String sender, String message) {
         SwingUtilities.invokeLater(() -> {
@@ -254,6 +282,27 @@ public class ChatRoom extends JPanel {
             String currentHistory = roomChatHistory.getOrDefault(activeRoomName, "");
             roomChatHistory.put(activeRoomName, currentHistory + fullMessage);
             chatArea.setCaretPosition(chatArea.getDocument().getLength());
+        });
+    }
+    public void clearUserList() {
+        System.out.println("[UI] Clearing user list.");
+        onlineUsers.clear();
+        updateUserListUI(); // Update UI to reflect empty state (will only show self if added back)
+    }
+    private void updateUserListUI() {
+        // Ensure UI updates happen on the EDT
+        SwingUtilities.invokeLater(() -> {
+            userNameArea.setText(""); // Clear existing text
+            // Always add self first, clearly marked
+            if (currentUserName != null) { // Check if username is set
+                userNameArea.append("- " + currentUserName + " (You)\n");
+            }
+            // Add other online users from the set
+            // Optionally sort them alphabetically
+            onlineUsers.stream()
+                    .filter(user -> !user.equals(currentUserName)) // Don't add self again
+                    .sorted(String.CASE_INSENSITIVE_ORDER)        // Optional sort
+                    .forEach(user -> userNameArea.append("- " + user + "\n"));
         });
     }
 
@@ -381,14 +430,17 @@ public class ChatRoom extends JPanel {
 
     /** Method called by Controller to update UI after a successful room switch */
     public void updateUIForRoomSwitch(String newActiveRoom) {
-        // Keep existing implementation
-         SwingUtilities.invokeLater(() -> {
-             this.activeRoomName = newActiveRoom;
-             this.setActiveRoomNameLabel(newActiveRoom);
-             this.chatArea.setText(roomChatHistory.getOrDefault(newActiveRoom, ""));
-             this.chatArea.setCaretPosition(chatArea.getDocument().getLength());
-             System.out.println("[UI] Switched view to room : " + activeRoomName);
+        SwingUtilities.invokeLater(() -> {
+            this.activeRoomName = newActiveRoom;
+            this.setActiveRoomNameLabel(newActiveRoom);
+            this.chatArea.setText(roomChatHistory.getOrDefault(newActiveRoom, ""));
+            this.chatArea.setCaretPosition(chatArea.getDocument().getLength());
+            // *** Clear user list on switch ***
+            this.clearUserList(); // Moved call here from controller for better timing
+            // *** Add self back immediately after clearing for the new room ***
+            this.addUserToList(this.currentUserName);
 
+            System.out.println("[UI] Switched view to room : " + activeRoomName);
              // Update tab highlighting (Keep existing)
              roomButtons.forEach((name, button) -> {
                 if (name.equals(newActiveRoom)) {

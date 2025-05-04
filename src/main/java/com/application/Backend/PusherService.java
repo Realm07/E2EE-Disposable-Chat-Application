@@ -101,12 +101,30 @@ public class PusherService {
         }, ConnectionState.ALL);
     }
 
+
     public void disconnect() {
         if (pusherClient != null) {
-            System.out.println("[Network] Disconnecting WebSocket...");
+            // <<< Explicitly Unsubscribe from the current channel >>>
+            if (this.channelName != null && !this.channelName.startsWith("chat-room-default-public-channel")) {
+                try {
+                    System.out.println("[PusherService] Unsubscribing from channel: " + this.channelName);
+                    pusherClient.unsubscribe(this.channelName);
+                    System.out.println("[PusherService] Unsubscribe request sent for: " + this.channelName);
+                    // Maybe a tiny pause is needed for Pusher to process unsubscribe? Less critical than leave msg.
+                    // try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                } catch (Exception e) {
+                    // Log if unsubscribe fails, but proceed with disconnect anyway
+                    System.err.println("[PusherService] Error during explicit unsubscribe from " + this.channelName + ": " + e.getMessage());
+                }
+            } else {
+                System.out.println("[PusherService] Skipping unsubscribe: Channel name not valid or default.");
+            }
+            // <<< End Unsubscribe >>>
+
+
+            System.out.println("[PusherService] Disconnecting WebSocket...");
             pusherClient.disconnect();
-            isConnected = false;
-            // Listener notified via onConnectionStateChange -> DISCONNECTED
+            isConnected = false; // Update state immediately after requesting disconnect
         }
     }
 
@@ -127,24 +145,29 @@ public class PusherService {
             Channel channel = pusherClient.subscribe(this.channelName);
 
             // Bind only to MESSAGE event now
+            // Inside PusherService.java -> subscribeToChannel() method
+
             channel.bind(MESSAGE_EVENT, new SubscriptionEventListener() {
                 @Override
                 public void onEvent(PusherEvent event) {
-                    //System.out.println("[Network] Received MESSAGE event raw: " + event.getData());
+                    // <<< LOG RAW DATA >>>
+                    System.out.println("[PusherService Raw Event] EventName: " + event.getEventName() + ", ChannelName: " + event.getChannelName() + ", Raw Data: " + event.getData());
+                    // <<< END LOG >>>
+
                     if (listener != null) {
-                        // We expect Pusher to send the raw JSON object string now due to sending fix
                         try {
-                            Gson gson = new Gson(); // Need gson instance here or pass one in
+                            Gson gson = new Gson();
                             MessageData messageData = gson.fromJson(event.getData(), MessageData.class);
-                            if (messageData != null && messageData.sender != null && messageData.encryptedData != null) {
+                            if (messageData != null && messageData.sender != null && messageData.type != null) { // Check type!
                                 listener.onMessageReceived(messageData);
                             } else {
-                                System.err.println("[Network] Received incomplete/malformed MessageData: " + event.getData());
+                                // Log parsing failure WITH raw data
+                                System.err.println("[PusherService] Parsed MessageData has null fields. Raw data was: " + event.getData());
                             }
-                        } catch (Exception e) { // Catch potential JsonSyntaxException etc.
-                            System.err.println("[Network] Error parsing MessageData JSON: " + e.getMessage());
-                            System.err.println("[Network] Raw message data: " + event.getData());
-                            e.printStackTrace();
+                        } catch (Exception e) {
+                            System.err.println("[PusherService] Error parsing MessageData JSON: " + e.getMessage());
+                            System.err.println("[PusherService] Raw message data was: " + event.getData()); // Log raw data on error
+                            // e.printStackTrace(); // Keep this commented unless debugging deeper GSON issues
                         }
                     }
                 }
