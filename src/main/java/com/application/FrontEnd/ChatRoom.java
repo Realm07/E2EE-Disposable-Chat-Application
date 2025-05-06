@@ -32,9 +32,8 @@ import java.io.IOException; // Needed for BackgroundGifPanel error handling
 
 // Backend and Component Imports
 import com.application.Backend.ChatController;
-// Import Renderer and its inner class explicitly or via wildcard
-import com.application.FrontEnd.components.MessageCellRenderer;
 import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage;
+// Import Renderer and its inner class explicitly or via wildcard
 // Ensure custom component classes exist and are imported (use wildcard or individual)
 import com.application.FrontEnd.components.*;
 
@@ -111,7 +110,7 @@ public class ChatRoom extends JPanel {
         userScrollPane.getViewport().setOpaque(false);
         userScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         userScrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-        Border userListBorder = BorderFactory.createTitledBorder( BorderFactory.createEtchedBorder(Color.GRAY, Color.DARK_GRAY), "Online Users", TitledBorder.CENTER, TitledBorder.TOP, new Font("SansSerif", Font.BOLD, 12), new Color(180, 180, 180));
+        Border userListBorder = BorderFactory.createTitledBorder( BorderFactory.createEtchedBorder(Color.GRAY, Color.DARK_GRAY), "Online Users", TitledBorder.CENTER, TitledBorder.TOP, new Font("SansSerif", Font.BOLD, 15), new Color(180, 180, 180));
         userScrollPane.setBorder(userListBorder);
 
         userDisplayPanel.add(Box.createRigidArea(new Dimension(0, 5)));
@@ -175,9 +174,11 @@ public class ChatRoom extends JPanel {
 
         // Room Tab Panel
         roomTabPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
-        roomTabPanel.setOpaque(false);
-        Border RoomNameBorder = BorderFactory.createTitledBorder( BorderFactory.createEtchedBorder(Color.GRAY, Color.DARK_GRAY), "Rooms", TitledBorder.CENTER, TitledBorder.TOP, new Font("SansSerif", Font.BOLD, 12), new Color(180, 180, 180));
-        roomTabPanel.setBorder(RoomNameBorder);
+        // roomTabPanel.setOpaque(false);
+        roomTabPanel.setBackground(new Color(115, 115, 115));
+        roomTabPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+        // Border RoomNameBorder = BorderFactory.createTitledBorder( BorderFactory.createEtchedBorder(Color.GRAY, Color.DARK_GRAY), "Rooms", TitledBorder.CENTER, TitledBorder.TOP, new Font("SansSerif", Font.BOLD, 12), new Color(180, 180, 180));
+        // roomTabPanel.setBorder(RoomNameBorder);
 
         // Add initial room button using the internal method
         addRoomTabInternal(initialRoomName);
@@ -318,19 +319,16 @@ public class ChatRoom extends JPanel {
 
         System.out.println("[UI] Creating tab button for: " + roomName);
         Random random = new Random();
-        // Ensure CustomButton class exists and constructor matches
-        CustomButton newRoomTabButton = new CustomButton(roomName, 80, 30, new Color(random.nextInt(255), random.nextInt(255), random.nextInt(255)));
+        CustomButton newRoomTabButton = new CustomButton(roomName, 80, 30, new Color(random.nextInt(255), random.nextInt(255), random.nextInt(255), 120));
         newRoomTabButton.setForeground(Color.WHITE);
-        newRoomTabButton.setFont(new Font("Segoe UI", Font.BOLD, 12)); // Smaller font for tabs
+        newRoomTabButton.setFont(new Font("Segoe UI", Font.BOLD, 12)); 
 
-        // ActionListener triggers CONTROLLER to handle the switch
         newRoomTabButton.addActionListener(e -> {
              System.out.println("[UI] Switch room tab button clicked for: " + roomName);
-             chatController.requestRoomSwitch(roomName); // Controller handles logic
+             chatController.requestRoomSwitch(roomName); 
         });
-        roomButtons.put(roomName, newRoomTabButton); // Store button reference
+        roomButtons.put(roomName, newRoomTabButton); 
 
-        // Add the new button *before* the "+" button
         int addButtonIndex = -1;
         for(int i=0; i < roomTabPanel.getComponentCount(); i++){
             if(roomTabPanel.getComponent(i) == addNewRoomButton){
@@ -338,69 +336,55 @@ public class ChatRoom extends JPanel {
                 break;
             }
         }
-        if (addButtonIndex == -1) addButtonIndex = roomTabPanel.getComponentCount(); // Add at end if "+" not found
+        if (addButtonIndex == -1) addButtonIndex = roomTabPanel.getComponentCount(); 
 
         roomTabPanel.add(newRoomTabButton, addButtonIndex);
 
-        // Revalidate and repaint the panel containing the tabs
         roomTabPanel.revalidate();
         roomTabPanel.repaint();
         System.out.println("[UI] Tab button added and panel revalidated for: " + roomName);
     }
 
-     /** Public method called by Controller to add tab, ensuring it runs on EDT. */
      public void addRoomTab(String roomName) {
           System.out.println("[UI] Received request to add tab for: " + roomName);
           SwingUtilities.invokeLater(() -> addRoomTabInternal(roomName));
      }
 
-    /**
-     * Updates the UI when switching to a different room view.
-     * Called by Controller (typically from onConnected or after password prompt).
-     * Ensures execution on the Event Dispatch Thread.
-     */
     public void updateUIForRoomSwitch(String newActiveRoom) {
-         SwingUtilities.invokeLater(() -> { // Ensure all UI updates happen on the EDT
+         SwingUtilities.invokeLater(() -> { 
              System.out.println("[UI] Updating UI view for room switch to: " + newActiveRoom);
-             this.activeRoomName = newActiveRoom; // Update internal state
-             this.setActiveRoomNameLabel(newActiveRoom); // Update room name display
+             this.activeRoomName = newActiveRoom; 
+             this.setActiveRoomNameLabel(newActiveRoom); 
 
-             // --- HISTORY RESTORATION ---
              System.out.println("[UI] Clearing chat list model.");
-             this.chatListModel.clear(); // Clear the visual list
+             this.chatListModel.clear(); 
 
              System.out.println("[UI] Requesting history from controller for: " + newActiveRoom);
-             if (chatController == null) { // Safety check
+             if (chatController == null) { 
                   System.err.println("[UI] Error: ChatController is null in updateUIForRoomSwitch!");
                   return;
              }
-             // Get history (Controller provides a copy)
              List<ChatMessage> history = chatController.getChatHistory(newActiveRoom);
              System.out.println("[UI] Received " + history.size() + " messages from history for " + newActiveRoom);
 
-             // Repopulate the list model
              for (ChatMessage msg : history) {
                  this.chatListModel.addElement(msg);
              }
              System.out.println("[UI] Repopulated chat list model.");
-             // --- END HISTORY RESTORATION ---
 
-             // Update tab button highlighting
              System.out.println("[UI] Updating tab button highlighting.");
              roomButtons.forEach((name, button) -> {
-                 // Check if button reference is not null before setting border
                  if(button != null) {
                      if (name.equals(newActiveRoom)) {
-                          button.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2)); // Highlight active
+                          button.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2)); 
                       } else {
-                          button.setBorder(UIManager.getBorder("Button.border")); // Reset others
+                          button.setBorder(UIManager.getBorder("Button.border")); 
                       }
                  } else {
                       System.err.println("[UI] Warning: Found null button reference for room '" + name + "' in roomButtons map.");
                  }
              });
 
-             // Scroll to the bottom after repopulating (nested invokeLater for timing)
              SwingUtilities.invokeLater(() -> {
                 int lastIndex = chatListModel.getSize() - 1;
                 if (lastIndex >= 0) {
@@ -411,12 +395,10 @@ public class ChatRoom extends JPanel {
          });
     }
 
-    // --- Setters ---
     public void setChatController(ChatController controller) { this.chatController = controller; }
     public void setMainFrame(MainFrame frame) { this.mainFrame = frame; }
 
-    // --- Inner Class for Background (Ensure it uses correct imports) ---
-    // Included as requested - verify image loading path and error handling
+
     private class BackgroundGifPanel extends JPanel {
         private Image gifImage;
         private String errorMessage = null;
@@ -425,7 +407,7 @@ public class ChatRoom extends JPanel {
         public BackgroundGifPanel(String imagePath) {
             this.imagePathUsed = imagePath;
             try {
-                URL gifUrl = getClass().getResource(imagePath); // Use class loader resource lookup
+                URL gifUrl = getClass().getResource(imagePath); 
                 if (gifUrl != null) {
                     ImageIcon icon = new ImageIcon(gifUrl);
                     // Check if the image loaded correctly (basic check)
