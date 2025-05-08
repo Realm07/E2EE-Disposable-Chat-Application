@@ -1,10 +1,8 @@
 package com.application.FrontEnd.components;
 
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 
-import javax.swing.BorderFactory; // Keep import for reference, but not used here
 import javax.swing.JTextField;
 
 public class CustomTextField extends JTextField{

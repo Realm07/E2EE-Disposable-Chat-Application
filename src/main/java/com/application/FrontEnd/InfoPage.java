@@ -2,20 +2,15 @@ package com.application.FrontEnd;
 
 // Core Swing & AWT Imports
 import javax.swing.*;
-import javax.swing.border.Border;
 import javax.swing.text.DefaultCaret;
 
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.GridBagConstraints;
 
 // Image Loading Imports
 import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.net.URL;
-
-// Custom Components
-import com.application.FrontEnd.components.*;
 
 
 public class InfoPage extends JPanel {
@@ -26,12 +21,16 @@ public class InfoPage extends JPanel {
     // --- Constants ---
     private static final String BACK_ICON_PATH = "/com/application/FrontEnd/images/ICON_Back.png";
     private static final String BACKGROUND_GIF_PATH = "/com/application/FrontEnd/images/BG_PublicRooms.png";
+    private static final String LOGO_IMAGE_PATH = "/com/application/FrontEnd/images/ICON_Logo.png";
+    private static final String GITHUB_IMAGE_PATH = "/com/application/FrontEnd/images/github.png";
 
     // --- UI Component Fields ---
     private JLayeredPane layeredPane;
     private BackgroundImagePanel backgroundPanel;
     private JPanel mainContentPanel;
     private JTextArea infoTextArea;
+    private JLabel versionLabel;
+
 
     private String infoText;
 
@@ -98,17 +97,46 @@ public class InfoPage extends JPanel {
             System.out.println("InfoPage Back button clicked - returning to Login Page");
             mainFrame.switchToLoginPage();
         });
+        
+        //Top panel
+        JPanel topInfoPanel = new JPanel();
+        topInfoPanel.setLayout(new BoxLayout(topInfoPanel, BoxLayout.Y_AXIS));
 
-        JLabel aboutLabel = new JLabel("About AnoChat");
-        aboutLabel.setFont(MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(30f) : new Font("SansSerif", Font.BOLD, 30));
+        //Top panel app logo
+        JLabel topLogo = createLogoLabel(LOGO_IMAGE_PATH, 120, 60);
+
+        //Top panel respository part 
+        JPanel midPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        midPanel.setOpaque(false);
+        JLabel gitHubLogo = createLogoLabel(GITHUB_IMAGE_PATH, 30, 30);
+
+        JLabel aboutLabel = new JLabel("Repository");
+        aboutLabel.setFont(MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(20f) : new Font("SansSerif", Font.BOLD, 30));
         aboutLabel.setForeground(Color.BLACK);
-        aboutLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        midPanel.add(gitHubLogo, BorderLayout.WEST);
+        midPanel.add(aboutLabel, BorderLayout.EAST);
+        
+
+        //version label
+        versionLabel = new JLabel("Version 1.0.0");
+        versionLabel.setForeground(Color.DARK_GRAY); 
+
+        topInfoPanel.add(topLogo, BorderLayout.NORTH);
+        topInfoPanel.add(midPanel, BorderLayout.CENTER);
+        topInfoPanel.add(versionLabel, BorderLayout.SOUTH);
+        topInfoPanel.setOpaque(false);
+
+
+        topLogo.setAlignmentX(Component.CENTER_ALIGNMENT);
+        midPanel.setAlignmentX(Component.CENTER_ALIGNMENT); // And its children need to be managed too
+        versionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JLabel rightPlaceholder = new JLabel();
         rightPlaceholder.setPreferredSize(backButton.getPreferredSize());
 
         topPanel.add(backButton, BorderLayout.WEST);
-        topPanel.add(aboutLabel, BorderLayout.CENTER);
+        topPanel.add(topInfoPanel, BorderLayout.CENTER);
         topPanel.add(rightPlaceholder, BorderLayout.EAST);
         
 
@@ -121,31 +149,7 @@ public class InfoPage extends JPanel {
         centerPanel.setBorder(BorderFactory.createEmptyBorder(10, 40, 40, 40));
         centerPanel.setOpaque(false);
 
-        infoText = "-Welcome to the ephemeral world of AnonChat, a communication platform built for spontaneous connection. Dive into real-time conversations without the need for permanent accounts or lengthy sign-up processes. Your identity is simply the username you choose for the current session.\r\n" + //
-                        "\r\n" + //
-                        "-AnonChat is designed around transient interaction. When you close the application, your session ends. This focus on immediate communication makes it ideal for quick group chats, joining public discussions, or setting up temporary private spaces.\r\n" + //
-                        "\r\n" + //
-                        "-Your journey begins at the dynamic Login screen, featuring animated visuals. Enter your chosen username for this session, and then decide your path: will you explore the established Public Servers or create/join a Private Room?\r\n" + //
-                        "\r\n" + //
-                        "-The Public Servers area offers a list of pre-configured chat hubs open to all users. Beside each room name, you can see a basic indicator of current activity. Simply select a room and click 'Join' to enter the shared conversation space instantly.\r\n" + //
-                        "\r\n" + //
-                        "-For more controlled discussions, navigate to the Private Room section. Here, you hold the keys. To start a new, exclusive chat, enter a unique Room Name and a Password, then click 'Create Room'. This combination becomes the entry requirement for anyone else wanting to join.\r\n" + //
-                        "\r\n" + //
-                        "-To enter an existing private space, you must know both the exact Room Name and the correct Password used when it was created. Input these credentials and click 'Join Room'. The application verifies access based on this specific name/password pair.\r\n" + //
-                        "\r\n" + //
-                        "-Conversations within these Private Rooms gain essential confidentiality. AnonChat employs an encryption layer where the security key itself is generated directly from the unique combination of the room's name and its password. Every message sent and received within that specific private session is protected using this derived key.\r\n" + //
-                        "\r\n" + //
-                        "-AnonChat presents a unique visual identity using the Java Swing framework. Custom-built interface elements provide a distinct look, while key screens utilize animated backgrounds managed through layered panes, adding a layer of visual depth to the user experience. Navigation between sections is designed to be straightforward, often featuring a dedicated 'Back' button with an icon for easy returns.\r\n" + //
-                        "\r\n" + //
-                        "-Under the hood, the application relies on the Pusher service for its core real-time messaging capabilities, ensuring swift delivery across connected clients. Project structure and dependencies are managed using Apache Maven. The private room security layer is handled by a custom Encryption Service.\r\n" + //
-                        "\r\n" + //
-                        "-AnonChat serves as a functional demonstration of these combined technologies, showcasing concepts in GUI design, real-time networking, and basic session-based communication security.\r\n" + //
-                        "\r\n" + //
-                        "-Created By:\r\n" + //
-                        "\r\n" + //
-                        "-Mohammad Shees Abdulla" + 
-                        "\r\n" +
-                        "-Mohammad Monis Ahmed";
+        infoText = "AnoChat is a secure end to end encrypted, disposable chat application, enabling anonymous real-time converstion";
                         
         infoTextArea = new JTextArea(infoText);
         infoTextArea.setFont(new Font("SansSerif", Font.PLAIN, 18));
@@ -174,6 +178,45 @@ public class InfoPage extends JPanel {
 
         return centerPanel;
     }
+
+    private JPanel createBottomContentPanel(){
+        JPanel bottomContentPanel = new JPanel();
+        bottomContentPanel.setLayout(new BorderLayout());
+        bottomContentPanel.setOpaque(false);
+
+
+        return bottomContentPanel;
+    }
+
+    private JLabel createLogoLabel(String path, int width, int height) {
+        JLabel label = new JLabel();
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        label.setVerticalAlignment(SwingConstants.CENTER);
+        try {
+            URL imgUrl = getClass().getResource(path);
+            if (imgUrl != null) {
+                ImageIcon icon = new ImageIcon(imgUrl);
+                if (icon.getIconWidth() > 0) {
+                    // Scale logo based on width - CHANGE SCALING HINT HERE
+                    Image scaledImage = icon.getImage().getScaledInstance(
+                            width,                         // target width (-1 for height maintains aspect ratio)
+                            -1,                          // target height
+                            Image.SCALE_SMOOTH     // <<--- Use REPLICATE for sharpness
+                    );
+                    label.setIcon(new ImageIcon(scaledImage));
+                    // Set preferred size based on scaled icon to help layout
+                    label.setPreferredSize(new Dimension(((ImageIcon)label.getIcon()).getIconWidth(), ((ImageIcon)label.getIcon()).getIconHeight()));
+                } else throw new Exception("Logo ImageIcon invalid");
+            } else { throw new Exception("Logo resource not found"); }
+        } catch (Exception e) {
+            System.err.println("ERROR loading logo (" + path + "): " + e.getMessage());
+            label.setText("AnonChat"); label.setForeground(Color.DARK_GRAY);
+            label.setFont(MainFrame.sansationBold.deriveFont(24f));
+            label.setPreferredSize(new Dimension((width + 30), height));
+        }
+        return label;
+    }
+
 
     private JButton createIconButton(String iconPath, String fallbackText, String tooltip) {
         JButton button = new JButton();

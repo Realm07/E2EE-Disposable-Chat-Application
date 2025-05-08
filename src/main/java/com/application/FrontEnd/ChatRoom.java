@@ -1,7 +1,5 @@
-// src/main/java/com/application/FrontEnd/ChatRoom.java
 package com.application.FrontEnd;
 
-// Swing & AWT Imports (ensure all needed are present)
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -13,11 +11,8 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
-import java.awt.MediaTracker;
 import java.awt.RenderingHints;
-import java.awt.event.ActionListener;
-import java.net.URL; // Needed for BackgroundGifPanel resource loading
-import java.util.Collections; // Potentially needed for empty list
+import java.net.URL; 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,15 +21,12 @@ import java.util.Random;
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.border.TitledBorder;
-import javax.imageio.ImageIO; // Needed for BackgroundGifPanel if using static images
-import java.io.IOException; // Needed for BackgroundGifPanel error handling
+import javax.imageio.ImageIO; 
+import java.io.IOException; 
+import java.awt.event.*;
 
-
-// Backend and Component Imports
 import com.application.Backend.ChatController;
 import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage;
-// Import Renderer and its inner class explicitly or via wildcard
-// Ensure custom component classes exist and are imported (use wildcard or individual)
 import com.application.FrontEnd.components.*;
 
 public class ChatRoom extends JPanel {
@@ -44,14 +36,22 @@ public class ChatRoom extends JPanel {
     private CustomButton leaveRoomButton;
     private CustomTextField chatTextField;
     private CustomLabel roomNameLabel;
-    private CustomTextArea userNameArea; // Ensure this class exists
+    private CustomTextArea userNameArea; 
     private JPanel roomTabPanel;
     private CustomButton addNewRoomButton;
     private CustomButton emojiButton;
     private CustomButton fileSendButton;
 
-    private JList<ChatMessage> chatList; // Use specific type
-    private DefaultListModel<ChatMessage> chatListModel; // Use specific type
+    private JPanel mainContentPanel;
+    private JLayeredPane layeredPane;
+    private BackgroundImagePanel backgroundPanel; 
+    
+
+    private JList<ChatMessage> chatList; 
+    private DefaultListModel<ChatMessage> chatListModel; 
+
+    private static final String LOGO_IMAGE_PATH = "/com/application/FrontEnd/images/gear.png";
+    private static final String BACKGROUND_IMAGE_PATH = "/com/application/FrontEnd/images/BG_LoginPage.jpg";
 
     // --- References & State ---
     private MainFrame mainFrame;
@@ -72,25 +72,58 @@ public class ChatRoom extends JPanel {
         // Initialize chat list model and component
         this.chatListModel = new DefaultListModel<>();
         this.chatList = new JList<>(this.chatListModel);
+
+        setLayout(new BorderLayout());
+
+        layeredPane = new JLayeredPane();
+        add(layeredPane, BorderLayout.CENTER);
+
+        backgroundPanel = new BackgroundImagePanel(BACKGROUND_IMAGE_PATH);
+        layeredPane.add(backgroundPanel, JLayeredPane.DEFAULT_LAYER);   
+
+        createMainPanel();
+        layeredPane.add(mainContentPanel, JLayeredPane.PALETTE_LAYER);
+
+        layeredPane.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                resizeAndLayoutLayeredComponents();
+            }
+            @Override
+            public void componentShown(ComponentEvent e) {
+                // Initial positioning after UI is shown
+                SwingUtilities.invokeLater(ChatRoom.this::resizeAndLayoutLayeredComponents);
+            }
+        });
+
+        addEventListeners(); // Add listeners AFTER all components are created
+    }
+
+    public void createMainPanel(){
+        mainContentPanel = new JPanel(new BorderLayout());
+        mainContentPanel.setOpaque(false);
+        mainContentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
         chatList.setCellRenderer(new MessageCellRenderer()); // Ensure Renderer exists
         chatList.setBackground(new Color(60, 60, 60));
         chatList.setOpaque(true);
         chatList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        chatList.setFocusable(false); // Prevent focus stealing
-
-        // --- Build the rest of the UI layout ---
-        Color backgroundColor = new Color(45, 45, 45);
-        this.setBackground(backgroundColor);
-        this.setOpaque(true);
-        setLayout(new BorderLayout());
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        Color defaultTextColor = Color.WHITE;
+        Color listAreaBackground = new Color(60, 60, 60, 180);
+        chatList.setSelectionBackground(null);
+        chatList.setSelectionBackground(listAreaBackground); // Make selection BG same as normal BG
+        chatList.setSelectionForeground(defaultTextColor);
+        
+        chatList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        chatList.setFocusable(false); 
 
         // --- Right Panel (User List & Room Info) ---
         JPanel userDisplayPanel = new JPanel();
         userDisplayPanel.setLayout(new BoxLayout(userDisplayPanel, BoxLayout.Y_AXIS));
         userDisplayPanel.setOpaque(false);
 
-        roomNameLabel = new CustomLabel("Room: "+initialRoomName, 200, 30); // Ensure CustomLabel exists
+        roomNameLabel = new CustomLabel("Room: "+activeRoomName, 200, 30); // Ensure CustomLabel exists
         roomNameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         roomNameLabel.setHorizontalAlignment(SwingConstants.CENTER);
         roomNameLabel.setForeground(new Color(200, 200, 200));
@@ -124,10 +157,15 @@ public class ChatRoom extends JPanel {
         leaveButtonPanel.setOpaque(false);
         leaveButtonPanel.add(leaveRoomButton);
 
+        JLabel systemButtonLabel = createLogoLabel();
+        
+
+
         JPanel rightColumnPanel = new JPanel();
         rightColumnPanel.setLayout(new BorderLayout(0, 10));
         rightColumnPanel.setOpaque(false);
         rightColumnPanel.setBorder(BorderFactory.createEmptyBorder(0, 5, 5, 5));
+        rightColumnPanel.add(systemButtonLabel, BorderLayout.NORTH);
         rightColumnPanel.add(userDisplayPanel, BorderLayout.CENTER);
         rightColumnPanel.add(leaveButtonPanel, BorderLayout.SOUTH);
 
@@ -177,11 +215,7 @@ public class ChatRoom extends JPanel {
         // roomTabPanel.setOpaque(false);
         roomTabPanel.setBackground(new Color(115, 115, 115));
         roomTabPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
-        // Border RoomNameBorder = BorderFactory.createTitledBorder( BorderFactory.createEtchedBorder(Color.GRAY, Color.DARK_GRAY), "Rooms", TitledBorder.CENTER, TitledBorder.TOP, new Font("SansSerif", Font.BOLD, 12), new Color(180, 180, 180));
-        // roomTabPanel.setBorder(RoomNameBorder);
-
-        // Add initial room button using the internal method
-        addRoomTabInternal(initialRoomName);
+        addRoomTabInternal(activeRoomName);
 
         addNewRoomButton = new CustomButton("+", 50, 30, new Color(150, 100, 150));
         roomTabPanel.add(addNewRoomButton); // Add "+" button at the end
@@ -210,15 +244,71 @@ public class ChatRoom extends JPanel {
         splitPane.setOpaque(false);
         splitPane.setContinuousLayout(true);
         splitPane.setBorder(null); // No border for the split pane itself
+        splitPane.setDividerSize(0);
 
-        // Add split pane to the main panel
-        add(splitPane, BorderLayout.CENTER);
-        addEventListeners(); // Add listeners AFTER all components are created
+        mainContentPanel.add(splitPane, BorderLayout.CENTER);
     }
-
+    
+    // Logo
+    private JLabel createLogoLabel() {
+        JLabel label = new JLabel();
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        label.setVerticalAlignment(SwingConstants.CENTER);
+    
+        // Set opaque and background for the label itself
+        label.setOpaque(true);
+        label.setBackground(new Color(128, 128, 128)); // Your desired background
+    
+        // Add padding (EmptyBorder)
+        label.setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5)); // 5px padding all around
+    
+        try {
+            URL imgUrl = getClass().getResource(LOGO_IMAGE_PATH);
+            if (imgUrl != null) {
+                ImageIcon icon = new ImageIcon(imgUrl);
+                if (icon.getIconWidth() > 0) {
+                    Image scaledImage = icon.getImage().getScaledInstance(
+                            30,
+                            -1,
+                            Image.SCALE_SMOOTH
+                    );
+                    label.setIcon(new ImageIcon(scaledImage));
+                    // REMOVE THIS LINE: label.setPreferredSize(new Dimension(...));
+                } else throw new Exception("Logo ImageIcon invalid");
+            } else { throw new Exception("Logo resource not found"); }
+        } catch (Exception e) {
+            System.err.println("ERROR loading logo (" + LOGO_IMAGE_PATH + "): " + e.getMessage());
+            label.setText("AnonChat");
+            label.setForeground(Color.DARK_GRAY);
+            label.setFont(MainFrame.sansationBold.deriveFont(24f));
+        }
+        return label;
+    }
 
     // --- Methods Called by Controller ---
 
+    ////////////////////
+    /// 
+    private void resizeAndLayoutLayeredComponents() {
+        SwingUtilities.invokeLater(() -> {
+            int layeredWidth = layeredPane.getWidth();
+            int layeredHeight = layeredPane.getHeight();
+            if (layeredWidth <= 0 || layeredHeight <= 0) return;
+
+            // Resize background to fill the entire layered pane
+            if (backgroundPanel != null) {
+                backgroundPanel.setBounds(0, 0, layeredWidth, layeredHeight);
+            }
+
+            // Resize main content panel to fill the entire layered pane
+            if (mainContentPanel != null) {
+                mainContentPanel.setBounds(0, 0, layeredWidth, layeredHeight);
+            }
+
+            layeredPane.revalidate();
+            layeredPane.repaint();
+        });
+    }
     /** Appends a single message (sender, text) to the currently visible chat list. */
     public void appendMessage(String sender, String message) {
         // Ensure executed on Event Dispatch Thread
@@ -399,74 +489,60 @@ public class ChatRoom extends JPanel {
     public void setMainFrame(MainFrame frame) { this.mainFrame = frame; }
 
 
-    private class BackgroundGifPanel extends JPanel {
-        private Image gifImage;
+    private static class BackgroundImagePanel extends JPanel {
+        private Image backgroundImage;
         private String errorMessage = null;
         private String imagePathUsed;
 
-        public BackgroundGifPanel(String imagePath) {
+        public BackgroundImagePanel(String imagePath) {
             this.imagePathUsed = imagePath;
             try {
-                URL gifUrl = getClass().getResource(imagePath); 
-                if (gifUrl != null) {
-                    ImageIcon icon = new ImageIcon(gifUrl);
-                    // Check if the image loaded correctly (basic check)
-                    if (icon.getIconWidth() == -1 || icon.getImageLoadStatus() != MediaTracker.COMPLETE) {
-                         this.errorMessage = "Failed to load GIF: ImageIcon status error";
-                         System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
-                         this.gifImage = null;
-                    } else {
-                        this.gifImage = icon.getImage(); // Get the Image object
-                        System.out.println("[BackgroundGifPanel] GIF Image loaded successfully from: " + imagePath);
-                    }
-                } else {
-                    this.errorMessage = "GIF resource not found";
-                    System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
-                    this.gifImage = null;
-                }
-            } catch (Exception e) {
-                this.errorMessage = "Exception loading GIF: " + e.getMessage();
-                System.err.println("[BackgroundGifPanel] " + this.errorMessage + " (" + imagePath + ")");
-                e.printStackTrace();
-                this.gifImage = null;
+                URL imgUrl = getClass().getResource(imagePath);
+                if (imgUrl != null) {
+                    this.backgroundImage = ImageIO.read(imgUrl);
+                    if (this.backgroundImage == null) throw new IOException("ImageIO returned null for " + imagePath);
+                    System.out.println("[BGPanel] Loaded: " + imagePath);
+                } else { throw new IOException("Resource not found: " + imagePath); }
+            } catch (IOException e) {
+                this.errorMessage = "Ex loading background: " + e.getMessage();
+                System.err.println(errorMessage); this.backgroundImage = null;
             }
-             setOpaque(false); // Usually false if drawing background image fully
+            // IMPORTANT: Background panel MUST be opaque IF it's the base layer covering everything.
+            setOpaque(true);
         }
 
         @Override
         protected void paintComponent(Graphics g) {
-            // Don't call super.paintComponent(g) if opaque is false and you paint the full area
-            // super.paintComponent(g);
-
-            if (gifImage != null) {
+            super.paintComponent(g); // Crucial for opaque=true to clear background
+            if (backgroundImage != null) {
                 Graphics2D g2d = (Graphics2D) g.create();
-                // Optional: Better scaling quality
+                // --- Draw image scaled to COVER ---
+                int panelW = getWidth(); int panelH = getHeight();
+                int imgW = backgroundImage.getWidth(this); int imgH = backgroundImage.getHeight(this);
+                if(imgW <=0 || imgH <= 0) { g2d.dispose(); return; } // Basic check
+                double imgAspect = (double) imgW / imgH; double panelAspect = (double) panelW / panelH;
+                int drawW, drawH, drawX, drawY;
+                if (panelAspect > imgAspect) { drawW = panelW; drawH = (int)(panelW / imgAspect); drawX = 0; drawY = (panelH - drawH) / 2; }
+                else { drawH = panelH; drawW = (int)(panelH * imgAspect); drawX = (panelW - drawW) / 2; drawY = 0; }
+                // Use interpolation for better quality when scaling
                 g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                // Draw the image, scaling it to the component's current width and height.
-                // 'this' as ImageObserver ensures animation repaint.
-                g2d.drawImage(gifImage, 0, 0, getWidth(), getHeight(), this);
+                g2d.drawImage(backgroundImage, drawX, drawY, drawW, drawH, this);
+                // --- End Cover Scaling ---
                 g2d.dispose();
             } else {
-                 // Draw fallback background and error message
-                 // Paint parent's background first if Opaque is false for proper layering
-                 // if (getParent() != null) {
-                 //    g.setColor(getParent().getBackground());
-                 //    g.fillRect(0, 0, getWidth(), getHeight());
-                 // }
-                g.setColor(new Color(77, 0, 77)); // Dark purple fallback
+                // Draw fallback background and error message
+                g.setColor(new Color(30, 50, 70)); // Dark blue fallback
                 g.fillRect(0, 0, getWidth(), getHeight());
-                g.setColor(Color.YELLOW);
-                g.setFont(new Font("SansSerif", Font.BOLD, 14));
-                String text = "BG Load Error: " + (errorMessage != null ? errorMessage : "Unknown");
+                g.setColor(Color.YELLOW); g.setFont(new Font("SansSerif", Font.BOLD, 14));
                 FontMetrics fm = g.getFontMetrics();
+                String text = "BG Load Error: " + (errorMessage != null ? errorMessage : "Unknown");
                 int msgWidth = fm.stringWidth(text);
-                // Basic centering
-                g.drawString(text, Math.max(5, (getWidth() - msgWidth) / 2) , getHeight() / 2 + fm.getAscent() / 2 - fm.getHeight()/2);
+                g.drawString(text, Math.max(5, (getWidth() - msgWidth) / 2), getHeight() / 2 + fm.getAscent() / 2 - fm.getHeight()/2); // Center slightly better
                 String pathText = "(" + imagePathUsed + ")";
                 msgWidth = fm.stringWidth(pathText);
-                g.drawString(pathText, Math.max(5, (getWidth() - msgWidth) / 2) , getHeight() / 2 + fm.getAscent() / 2 + fm.getHeight()/2);
+                g.drawString(pathText, Math.max(5, (getWidth() - msgWidth) / 2), getHeight() / 2 + fm.getAscent() / 2 + fm.getHeight()/2);
             }
         }
-    } // End BackgroundGifPanel inner class
+    } // --- End Inner Class ---
 
 } // End ChatRoom class

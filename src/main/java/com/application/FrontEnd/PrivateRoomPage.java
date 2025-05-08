@@ -8,7 +8,6 @@ import java.net.URL;
 import javax.imageio.ImageIO; // Needed for static background image
 import java.io.IOException;   // Needed for static background image
 import javax.swing.*;
-import javax.swing.border.MatteBorder; // For underline border
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 
