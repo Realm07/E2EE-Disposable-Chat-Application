@@ -1,0 +1,1 @@
+ I also want to space out room name and enter room away from the center such that Room name has all the room names of rooms directly under it. I also want all the join room buttons directly below enter room. I also want the connected user numbers directly below the connected user headings. Rewrite entire public server room page 

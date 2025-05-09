@@ -135,6 +135,7 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
         }
     }
 
+
     /**
      * Called by ChatRoom leave button. Disconnects, clears all state, switches UI to login.
      */
@@ -324,23 +325,25 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
 
     @Override
     public void onConnected() {
-        final String connectedChannel = networkService.getChannelName(); // Capture final variable for lambda
+        final String connectedChannel = networkService.getChannelName();
+        final String roomName = this.activeRoomName;
+
         System.out.println("[Controller] Network Listener: Connected event received for channel: " + connectedChannel);
-        SwingUtilities.invokeLater(() -> { // Ensure UI updates are on EDT
-            if (chatRoomUI != null && activeRoomName != null) {
-                // Check if the connection is for the room we currently think is active
-                if (connectedChannel != null && connectedChannel.contains(activeRoomName)) {
-                    System.out.println("[Controller] Confirmed connection to the active room: " + activeRoomName);
-                    // Connection confirmed, NOW update the main UI view (highlight, clear chat, load history)
-                    System.out.println("[Controller] Notifying UI to update view for connection to: " + activeRoomName);
-                    chatRoomUI.updateUIForRoomSwitch(activeRoomName);
+        SwingUtilities.invokeLater(() -> {
+            if (chatRoomUI != null && roomName != null) {
+                if (connectedChannel != null && connectedChannel.contains(roomName)) {
+                    System.out.println("[Controller] Confirmed connection to the active room: " + roomName);
+                    chatRoomUI.updateUIForRoomSwitch(roomName); // Clears history, adds self to list, updates label
+                    chatRoomUI.displaySystemMessage("Welcome to " + roomName + "! You are connected.");
+                    // Send JOIN message to others
+                    sendSystemMessage(MessageType.JOIN); // <<< Ensure this uses currentUsername
                 } else {
-                    System.err.println("[Controller] Network Listener: Connected event for unexpected channel '" + connectedChannel + "'. Expected channel containing '" + activeRoomName + "'. State mismatch?");
-                    chatRoomUI.displaySystemMessage("[Warning] Connected to network channel: " + connectedChannel);
-                    // Decide how to handle mismatch - maybe force UI to reflect actual connection?
+                    System.err.println("[Controller] Mismatch or null state onConnected. Channel: " + connectedChannel + " ActiveRoom: " + roomName);
+                    chatRoomUI.updateUIForRoomSwitch(roomName); // Update to intended room
+                    chatRoomUI.displaySystemMessage("[Warning] Connected to network channel: " + connectedChannel + ". Expected: " + roomName);
                 }
             } else {
-                 System.out.println("[Controller] Network Listener: Connected event ignored, UI or active room is null/changed. UI State: " + (chatRoomUI != null) + ", Active Room: " + activeRoomName);
+                System.out.println("[Controller] Connected event ignored, UI or active room is null/changed.");
             }
         });
     }
@@ -357,71 +360,105 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
     }
 
     @Override
-    public void onMessageReceived(final MessageData messageData) { // Ensure MessageData class exists
-        if (messageData == null || messageData.sender == null || messageData.encryptedData == null) {
-             System.err.println("[Controller] Network Listener: Received invalid MessageData.");
-             return;
+    public void onMessageReceived(MessageData messageData) {
+        if (messageData == null || messageData.sender == null || messageData.type == null) {
+            System.err.println("[Controller] Received invalid MessageData (null fields).");
+            return;
         }
-        // Process only if we know which room is active
-        final String roomForMessage = this.activeRoomName; // Capture current active room
+
+        final String sender = messageData.sender;
+        final String roomForMessage = this.activeRoomName;
         if (roomForMessage == null) {
-             System.err.println("[Controller] Message received but no active room set. Ignoring.");
-             return;
+            System.err.println("[Controller] Message received but no active room set. Ignoring.");
+            return;
         }
-        // Assume messages only arrive for the currently ACTIVE (subscribed) room
-        System.out.println("[Controller] Network Listener: Encrypted message received from " + messageData.sender + " for active room " + roomForMessage);
 
-        try {
-            // Decryption must happen off the EDT if potentially slow
-            final String decryptedText = encryptionService.decrypt(messageData.encryptedData);
-            System.out.println("[Controller] Decrypted message from " + messageData.sender + ": " + decryptedText);
+        // Optionally ignore self-sent system messages if needed, but chat messages are fine.
+        // if (sender.equals(this.currentUsername) && messageData.type != MessageType.CHAT) {
+        //     System.out.println("[Controller] Ignoring self-sent system message: " + messageData.type);
+        //     return;
+        // }
 
-            // Create the ChatMessage object
-            final ChatMessage chatMessage = new ChatMessage(messageData.sender, decryptedText);
+        System.out.println("[Controller] Network Listener: Received " + messageData.type + " from " + sender + " for active room " + roomForMessage);
 
-            // Add to the history map for the room the message belongs to
-            // Use computeIfAbsent in a thread-safe manner if accessed by multiple threads,
-            // but here it's likely okay if only modified from network thread + controller methods
-             synchronized(roomChatHistories) { // Basic synchronization if needed
-                 roomChatHistories.computeIfAbsent(roomForMessage, k -> new ArrayList<>()).add(chatMessage);
-             }
-            System.out.println("[Controller] Added message to history map for room: " + roomForMessage);
-
-            // Update UI on EDT
-            SwingUtilities.invokeLater(() -> {
-                // Double check if the UI is still active and showing the SAME room
-                if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                    // Pass strings to match existing appendMessage signature
-                    chatRoomUI.appendMessage(chatMessage.getSender(), chatMessage.getMessage());
-                } else {
-                    System.out.println("[Controller] Message for room '" + roomForMessage + "' received, but UI is not active or shows different room ('"+this.activeRoomName+"'). Message stored, not displayed immediately.");
-                    // Optionally add unread indicator to the room tab here?
+        switch (messageData.type) {
+            case CHAT:
+                if (messageData.encryptedData == null) {
+                    System.err.println("[Controller] Received CHAT message with null data from " + sender);
+                    return;
                 }
-            });
-
-        } catch (Exception e) {
-            System.err.println("[Controller] Failed decrypt message from " + messageData.sender + ": " + e.getMessage());
-             // Update UI on EDT
-             SwingUtilities.invokeLater(() -> {
-                if (chatRoomUI != null) {
-                    chatRoomUI.displaySystemMessage("[Error] Could not decrypt message from " + messageData.sender + ".");
+                try {
+                    final String decryptedText = encryptionService.decrypt(messageData.encryptedData);
+                    final ChatMessage chatMessage = new ChatMessage(sender, decryptedText);
+                    synchronized(roomChatHistories) {
+                        roomChatHistories.computeIfAbsent(roomForMessage, k -> new ArrayList<>()).add(chatMessage);
+                    }
+                    SwingUtilities.invokeLater(() -> {
+                        if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                            chatRoomUI.appendMessage(chatMessage.getSender(), chatMessage.getMessage());
+                        }
+                    });
+                } catch (Exception e) {
+                    System.err.println("[Controller] Failed decrypt message from " + sender + ": " + e.getMessage());
+                    SwingUtilities.invokeLater(() -> {
+                        if (chatRoomUI != null) chatRoomUI.displaySystemMessage("[Error] Could not decrypt message from " + sender + ".");
+                    });
                 }
-             });
+                break;
+
+            case JOIN:
+                SwingUtilities.invokeLater(() -> {
+                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                        chatRoomUI.displaySystemMessage(sender + " has joined the room.");
+                        chatRoomUI.addUserToList(sender);
+                    }
+                });
+                break;
+
+            case LEAVE:
+                SwingUtilities.invokeLater(() -> {
+                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                        chatRoomUI.displaySystemMessage(sender + " has left the room.");
+                        chatRoomUI.removeUserFromList(sender);
+                    }
+                });
+                break;
+
+            case DOWNLOAD: // <<< HANDLE DOWNLOAD NOTIFICATION >>>
+                SwingUtilities.invokeLater(() -> {
+                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                        // Don't display if it's your own download notification
+                        if (!sender.equals(this.currentUsername)) {
+                            chatRoomUI.displaySystemMessage(sender + " has downloaded the chat history.");
+                        }
+                    }
+                });
+                break;
+
+            default:
+                System.err.println("[Controller] Received message with unknown type: " + messageData.type);
         }
     }
+
 
     @Override
     public void onError(final String message, final Exception e) {
         System.err.println("[Controller] Network Listener: Error: " + message + (e != null ? " - " + e.getMessage() : ""));
-        // Update UI on EDT
-         SwingUtilities.invokeLater(() -> {
-             if (chatRoomUI != null) {
-                 chatRoomUI.displaySystemMessage("[Network Error] " + message);
-             } else {
+        if (message != null && message.contains("Existing subscription to channel")) {
+            System.out.println("[Controller] Suppressing 'Existing subscription' error from chat display.");
+            // Log the stack trace for debugging if needed, but don't show in chat
+            if (e != null) { e.printStackTrace(); }
+            return; // Exit without calling displaySystemMessage
+        }
+        SwingUtilities.invokeLater(() -> {
+            if (chatRoomUI != null) {
+                // Display other network errors
+                chatRoomUI.displaySystemMessage("[Network Error] " + message);
+            } else {
                 // Show popup only if UI isn't available (less intrusive)
                 showErrorDialog("Network Error: " + message);
-             }
-         });
+            }
+        });
          if (e != null) {
              e.printStackTrace(); // Log stack trace for debugging
          }
@@ -447,5 +484,47 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
              return new ArrayList<>(roomChatHistories.getOrDefault(roomName, List.of())); // Use List.of() for empty immutable list if Java 9+
              // Or for older Java: return new ArrayList<>(roomChatHistories.getOrDefault(roomName, Collections.emptyList()));
          }
+    }
+    private void sendSystemMessage(MessageType type) {
+        // Check connection state FIRST
+        if (networkService == null || !networkService.isConnectedExplicit()) { // Use explicit check
+            System.err.println("[Controller] Skipping system message " + type + ": Network not connected.");
+            return;
+        }
+        // Check username
+        if (currentUsername == null) {
+            System.err.println("[Controller] Skipping system message " + type + ": currentUsername is null.");
+            return;
+        }
+
+        System.out.println("[Controller] Sending system message: " + type + " for user: " + currentUsername);
+        MessageData sysMessage = new MessageData(type, this.currentUsername);
+        boolean sent = networkService.sendChatMessage(sysMessage); // Send and check if initiated
+
+        if (!sent) {
+            System.err.println("[Controller] Failed to initiate sending system message: " + type);
+        }
+        // Remove the sleep from here, handle timing in the calling methods if needed
+        // if (sent && type == MessageType.LEAVE) {
+        //    try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        // }
+    }
+
+    public void notifyChatDownloaded(String roomName, String downloaderUsername) {
+        System.out.println("[Controller] User '" + downloaderUsername + "' initiated download for room: " + roomName);
+
+        // Ensure we are connected, the action is for the active room, and it's the current user performing it.
+        if (networkService != null && networkService.isConnectedExplicit() &&
+                this.activeRoomName != null && this.activeRoomName.equals(roomName) &&
+                this.currentUsername != null && this.currentUsername.equals(downloaderUsername)) {
+
+            System.out.println("[Controller] Sending DOWNLOAD notification for user: " + this.currentUsername);
+            sendSystemMessage(MessageType.DOWNLOAD); // sendSystemMessage uses this.currentUsername
+        } else {
+            System.err.println("[Controller] Conditions not met to send DOWNLOAD notification. " +
+                    "Connected: " + (networkService != null && networkService.isConnectedExplicit()) +
+                    ", Active Room Match: " + (this.activeRoomName != null && this.activeRoomName.equals(roomName)) +
+                    ", User Match: " + (this.currentUsername != null && this.currentUsername.equals(downloaderUsername)));
+        }
     }
 }

@@ -179,4 +179,8 @@ public class PusherService {
             return false;
         }
     }
+    // Method for more direct state check
+    public boolean isConnectedExplicit() {
+        return pusherClient != null && pusherClient.getConnection().getState() == ConnectionState.CONNECTED;
+    }
 }
