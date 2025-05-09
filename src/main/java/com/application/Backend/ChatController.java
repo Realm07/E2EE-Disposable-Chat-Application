@@ -22,6 +22,8 @@ import com.application.FrontEnd.MainFrame;
 import com.application.FrontEnd.components.MessageCellRenderer;
 import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage; // Explicit import for clarity
 
+import java.util.Timer;
+import java.util.TimerTask;
 /**
  * Controller coordinating actions between the Swing UI and backend services.
  * Manages application state, including per-room chat history.
@@ -43,6 +45,14 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
 
     // Store chat history per room
     private Map<String, List<ChatMessage>> roomChatHistories = new HashMap<>();
+
+    // --- Heartbeat Management ---
+    private Timer heartbeatSendTimer;
+    private Map<String, Long> userLastHeartbeat = new HashMap<>(); // Username -> Timestamp
+    private Timer userTimeoutCheckTimer;
+    private static final long HEARTBEAT_INTERVAL_MS = 20 * 1000; // Send heartbeat every 20 seconds
+    private static final long USER_TIMEOUT_THRESHOLD_MS = HEARTBEAT_INTERVAL_MS * 3; // Timeout if no heartbeat for 60s
+    // --- End Heartbeat Management ---
 
     // --- Public Room Handling ---
     private static final Map<String, String> PUBLIC_ROOM_KEYS = new HashMap<>();
@@ -140,8 +150,12 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
      * Called by ChatRoom leave button. Disconnects, clears all state, switches UI to login.
      */
     public void leaveRoom() {
-        System.out.println("[Controller] User '" + (currentUsername != null ? currentUsername : "Unknown") + "' initiated leaving.");
-        if (chatRoomUI != null && currentUsername != null) {
+        System.out.println("[Controller] User '" + (currentUsername != null ? currentUsername : "Unknown") + "' initiated leaving via button.");
+        stopHeartbeatTimers(); // Stop heartbeats
+        if (currentUsername != null) {
+            sendSystemMessage(MessageType.LEAVE); // Send LEAVE before actual disconnect
+        }
+        if (networkService != null) networkService.disconnect();if (chatRoomUI != null && currentUsername != null) {
             chatRoomUI.displaySystemMessage(currentUsername + " is leaving the application.");
         } else {
             System.out.println("[Controller] Cannot display leaving message: currentUsername=" + currentUsername + ", chatRoomUI=" + (chatRoomUI != null));
@@ -175,14 +189,11 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
      */
     public void handleApplicationShutdown() {
         System.out.println("[Controller] Application shutdown requested.");
-        if (networkService != null && networkService.isConnected()) {
-            System.out.println("[Controller] Disconnecting network service due to shutdown...");
-            networkService.disconnect();
-            try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            System.out.println("[Controller] Network service disconnect requested during shutdown.");
-        } else if (networkService != null) {
-            System.out.println("[Controller] Network service already disconnected or null during shutdown.");
+        stopHeartbeatTimers(); // Stop heartbeats
+        if (currentUsername != null && networkService != null && networkService.isConnectedExplicit()) {
+            sendSystemMessage(MessageType.LEAVE);
         }
+        if (networkService != null) networkService.disconnect();
         System.out.println("[Controller] Shutdown cleanup complete.");
     }
 
@@ -208,12 +219,15 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
      */
     public void joinOrSwitchToRoom(String roomName, String password) {
         System.out.println("[Controller] Attempting to join/switch backend to room: " + roomName);
+        stopHeartbeatTimers(); // Stop heartbeats for the old room
 
         if (networkService.isConnected()) {
-            System.out.println("[Controller] Disconnecting from previous room: " + activeRoomName);
+            if(this.currentUsername != null && this.activeRoomName != null) {
+                sendSystemMessage(MessageType.LEAVE); // Leave current room
+            }
+            System.out.println("[Controller] Disconnecting from previous channel: " + networkService.getChannelName());
             networkService.disconnect();
-        } else {
-             System.out.println("[Controller] Not currently connected, no disconnect needed.");
+            try { Thread.sleep(300); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
         }
 
         System.out.println("[Controller] Deriving key for room: " + roomName);
@@ -327,23 +341,24 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
     public void onConnected() {
         final String connectedChannel = networkService.getChannelName();
         final String roomName = this.activeRoomName;
+        System.out.println("[Controller] Network Listener: Connected. Channel: " + connectedChannel + ", Room: " + roomName);
 
-        System.out.println("[Controller] Network Listener: Connected event received for channel: " + connectedChannel);
         SwingUtilities.invokeLater(() -> {
-            if (chatRoomUI != null && roomName != null) {
-                if (connectedChannel != null && connectedChannel.contains(roomName)) {
-                    System.out.println("[Controller] Confirmed connection to the active room: " + roomName);
-                    chatRoomUI.updateUIForRoomSwitch(roomName); // Clears history, adds self to list, updates label
-                    chatRoomUI.displaySystemMessage("Welcome to " + roomName + "! You are connected.");
-                    // Send JOIN message to others
-                    sendSystemMessage(MessageType.JOIN); // <<< Ensure this uses currentUsername
-                } else {
-                    System.err.println("[Controller] Mismatch or null state onConnected. Channel: " + connectedChannel + " ActiveRoom: " + roomName);
-                    chatRoomUI.updateUIForRoomSwitch(roomName); // Update to intended room
-                    chatRoomUI.displaySystemMessage("[Warning] Connected to network channel: " + connectedChannel + ". Expected: " + roomName);
-                }
+            if (chatRoomUI != null && roomName != null && connectedChannel != null && connectedChannel.contains(roomName)) {
+                System.out.println("[Controller] Confirmed connection to active room: " + roomName);
+                chatRoomUI.updateUIForRoomSwitch(roomName); // Clears lists, adds self, loads history
+                chatRoomUI.displaySystemMessage("Welcome to " + roomName + "! You are connected.");
+
+                // Send JOIN message and start heartbeats
+                sendSystemMessage(MessageType.JOIN);
+                userLastHeartbeat.put(this.currentUsername, System.currentTimeMillis()); // Track self
+                startHeartbeatTimers(); // Start sending our heartbeats and checking for others
             } else {
-                System.out.println("[Controller] Connected event ignored, UI or active room is null/changed.");
+                System.err.println("[Controller] Connected event: Mismatch or null state. UI: " + (chatRoomUI != null) + ", Room: " + roomName + ", Channel: " + connectedChannel);
+                if (chatRoomUI != null && roomName != null) { // Try to update UI if possible
+                    chatRoomUI.updateUIForRoomSwitch(roomName);
+                    chatRoomUI.displaySystemMessage("[Warning] Connected to " + connectedChannel + ". Expected for " + roomName);
+                }
             }
         });
     }
@@ -351,18 +366,23 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
     @Override
     public void onDisconnected() {
         System.out.println("[Controller] Network Listener: Disconnected!");
-         SwingUtilities.invokeLater(() -> { // Ensure UI updates are on EDT
+        stopHeartbeatTimers(); // Stop heartbeats when disconnected
+        SwingUtilities.invokeLater(() -> {
             if (chatRoomUI != null) {
-               chatRoomUI.displaySystemMessage("[System] Disconnected from chat service.");
-               // Potentially disable input fields etc.
+                chatRoomUI.displaySystemMessage("[System] Disconnected from chat service.");
             }
         });
     }
 
     @Override
     public void onMessageReceived(MessageData messageData) {
-        if (messageData == null || messageData.sender == null || messageData.type == null) {
-            System.err.println("[Controller] Received invalid MessageData (null fields).");
+        if (messageData == null) { // Check if parsing failed in PusherService
+            System.err.println("[Controller] onMessageReceived called with null messageData object. Parsing likely failed in PusherService.");
+            // No further processing possible
+            return;
+        }
+        if (messageData.sender == null || messageData.type == null) {
+            System.err.println("[Controller] Received MessageData with null sender or type. Sender: " + messageData.sender + ", Type: " + messageData.type);
             return;
         }
 
@@ -373,18 +393,23 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
             return;
         }
 
+        // --- Ignore Self System Messages (Re-add for cleaner logs/behaviour) ---
+        if (sender.equals(this.currentUsername) && messageData.type != MessageType.CHAT) {
+            System.out.println("[Controller] Ignoring self-sent system message: " + messageData.type);
+            return;
+        }
+
         // Optionally ignore self-sent system messages if needed, but chat messages are fine.
         // if (sender.equals(this.currentUsername) && messageData.type != MessageType.CHAT) {
         //     System.out.println("[Controller] Ignoring self-sent system message: " + messageData.type);
         //     return;
         // }
 
-        System.out.println("[Controller] Network Listener: Received " + messageData.type + " from " + sender + " for active room " + roomForMessage);
-
+        System.out.println("[Controller] Network Listener: Processing " + messageData.type + " from " + sender + " for active room " + roomForMessage);
         switch (messageData.type) {
             case CHAT:
                 if (messageData.encryptedData == null) {
-                    System.err.println("[Controller] Received CHAT message with null data from " + sender);
+                    System.err.println("[Controller] Received CHAT message with null encryptedData from " + sender);
                     return;
                 }
                 try {
@@ -396,6 +421,11 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
                     SwingUtilities.invokeLater(() -> {
                         if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
                             chatRoomUI.appendMessage(chatMessage.getSender(), chatMessage.getMessage());
+                            // <<< If receiving chat from someone not in list, add them (infer presence) >>>
+                            if (!sender.equals(this.currentUsername)) { // Don't add self this way
+                                chatRoomUI.addUserToList(sender);
+                            }
+                            // <<< End infer presence >>>
                         }
                     });
                 } catch (Exception e) {
@@ -404,37 +434,48 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
                         if (chatRoomUI != null) chatRoomUI.displaySystemMessage("[Error] Could not decrypt message from " + sender + ".");
                     });
                 }
-                break;
+                break; // <<< Ensure break statements! >>>
 
             case JOIN:
+                userLastHeartbeat.put(sender, System.currentTimeMillis()); // Record heartbeat/join time
                 SwingUtilities.invokeLater(() -> {
                     if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        chatRoomUI.displaySystemMessage(sender + " has joined the room.");
-                        chatRoomUI.addUserToList(sender);
+                        if (!sender.equals(this.currentUsername)) {
+                            chatRoomUI.displaySystemMessage(sender + " has joined the room.");
+                        }
+                        chatRoomUI.addUserToList(sender); // Add to UI list
                     }
                 });
                 break;
 
             case LEAVE:
+                userLastHeartbeat.remove(sender); // Remove from heartbeat tracking
                 SwingUtilities.invokeLater(() -> {
                     if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
                         chatRoomUI.displaySystemMessage(sender + " has left the room.");
                         chatRoomUI.removeUserFromList(sender);
                     }
                 });
-                break;
-
-            case DOWNLOAD: // <<< HANDLE DOWNLOAD NOTIFICATION >>>
+            break;
+            case DOWNLOAD:
                 SwingUtilities.invokeLater(() -> {
                     if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        // Don't display if it's your own download notification
-                        if (!sender.equals(this.currentUsername)) {
+                        if (!sender.equals(this.currentUsername)) { // Don't announce own download
                             chatRoomUI.displaySystemMessage(sender + " has downloaded the chat history.");
                         }
                     }
                 });
                 break;
-
+            case HEARTBEAT:
+                // System.out.println("[Controller Heartbeat] Received HEARTBEAT from " + sender);
+                userLastHeartbeat.put(sender, System.currentTimeMillis()); // Update last seen time
+                // Ensure user is in the list if a heartbeat is received (e.g., if we joined late)
+                if (chatRoomUI != null && !sender.equals(this.currentUsername)) { // Don't re-add self from own heartbeat
+                    SwingUtilities.invokeLater(() -> {
+                        if (chatRoomUI != null) chatRoomUI.addUserToList(sender);
+                    });
+                }
+                break;
             default:
                 System.err.println("[Controller] Received message with unknown type: " + messageData.type);
         }
@@ -499,15 +540,11 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
 
         System.out.println("[Controller] Sending system message: " + type + " for user: " + currentUsername);
         MessageData sysMessage = new MessageData(type, this.currentUsername);
-        boolean sent = networkService.sendChatMessage(sysMessage); // Send and check if initiated
-
-        if (!sent) {
-            System.err.println("[Controller] Failed to initiate sending system message: " + type);
+        networkService.sendChatMessage(sysMessage);
+        // Delay for LEAVE is still useful
+        if (type == MessageType.LEAVE) {
+            try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
-        // Remove the sleep from here, handle timing in the calling methods if needed
-        // if (sent && type == MessageType.LEAVE) {
-        //    try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        // }
     }
 
     public void notifyChatDownloaded(String roomName, String downloaderUsername) {
@@ -525,6 +562,78 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
                     "Connected: " + (networkService != null && networkService.isConnectedExplicit()) +
                     ", Active Room Match: " + (this.activeRoomName != null && this.activeRoomName.equals(roomName)) +
                     ", User Match: " + (this.currentUsername != null && this.currentUsername.equals(downloaderUsername)));
+        }
+    }
+    private void startHeartbeatTimers() {
+        stopHeartbeatTimers(); // Stop any existing timers first
+
+        // Timer to send heartbeats
+        heartbeatSendTimer = new Timer("HeartbeatSendTimer-" + currentUsername, true); // Daemon thread
+        heartbeatSendTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                if (networkService.isConnectedExplicit() && currentUsername != null) {
+                    // System.out.println("[Controller Heartbeat] Sending HEARTBEAT for " + currentUsername);
+                    sendSystemMessage(MessageType.HEARTBEAT);
+                }
+            }
+        }, HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS);
+        System.out.println("[Controller] Heartbeat SEND timer started for " + currentUsername);
+
+        // Timer to check for timed-out users
+        userTimeoutCheckTimer = new Timer("UserTimeoutCheckTimer-" + currentUsername, true); // Daemon thread
+        userTimeoutCheckTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                checkUserTimeouts();
+            }
+        }, USER_TIMEOUT_THRESHOLD_MS, USER_TIMEOUT_THRESHOLD_MS / 2); // Check more frequently than threshold
+        System.out.println("[Controller] User TIMEOUT CHECK timer started for " + currentUsername);
+    }
+
+    private void stopHeartbeatTimers() {
+        if (heartbeatSendTimer != null) {
+            heartbeatSendTimer.cancel();
+            heartbeatSendTimer = null;
+            System.out.println("[Controller] Heartbeat SEND timer stopped.");
+        }
+        if (userTimeoutCheckTimer != null) {
+            userTimeoutCheckTimer.cancel();
+            userTimeoutCheckTimer = null;
+            System.out.println("[Controller] User TIMEOUT CHECK timer stopped.");
+        }
+        userLastHeartbeat.clear(); // Clear last known heartbeats when timers stop (e.g., room switch)
+    }
+
+    private void checkUserTimeouts() {
+        if (chatRoomUI == null) return; // No UI to update
+
+        long currentTime = System.currentTimeMillis();
+        List<String> timedOutUsers = new ArrayList<>();
+
+        // Iterate over a copy of keys to avoid ConcurrentModificationException if removing
+        new ArrayList<>(userLastHeartbeat.keySet()).forEach(user -> {
+            // Don't time out self
+            if (user.equals(currentUsername)) {
+                userLastHeartbeat.put(user, currentTime); // Keep self updated
+                return;
+            }
+            Long lastSeen = userLastHeartbeat.get(user);
+            if (lastSeen == null || (currentTime - lastSeen > USER_TIMEOUT_THRESHOLD_MS)) {
+                timedOutUsers.add(user);
+            }
+        });
+
+        for (String user : timedOutUsers) {
+            System.out.println("[Controller Timeout] User " + user + " timed out.");
+            userLastHeartbeat.remove(user); // Remove from tracking
+            final String finalUser = user; // For lambda
+            SwingUtilities.invokeLater(() -> {
+                if (chatRoomUI != null) { // Re-check UI
+                    chatRoomUI.displaySystemMessage(finalUser + " has disconnected (timeout).");
+                    chatRoomUI.removeUserFromList(finalUser);
+                }
+            });
         }
     }
 }

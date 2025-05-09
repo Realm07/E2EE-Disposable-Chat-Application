@@ -324,13 +324,7 @@ public class ChatRoom extends JPanel {
         });
     }
 
-    public void clearUserList() {
-        SwingUtilities.invokeLater(() -> { // Ensure set modification and UI update are on EDT
-            System.out.println("[UI] Clearing user list.");
-            onlineUsers.clear();
-            updateUserListUI(); // Update UI to reflect empty state
-        });
-    }
+
 
     private void updateUserListUI() {
         // Assumed to be called on EDT by the public methods above
@@ -493,23 +487,21 @@ public class ChatRoom extends JPanel {
             this.activeRoomName = newActiveRoom;
             this.setActiveRoomNameLabel(newActiveRoom);
 
-            // Clear visual list & Get/Restore History
+            // Restore History
             this.chatListModel.clear();
             if (chatController != null) {
                 List<ChatMessage> history = chatController.getChatHistory(newActiveRoom);
-                System.out.println("[UI] Received " + history.size() + " messages from history for " + newActiveRoom);
-                for (ChatMessage msg : history) {
-                    this.chatListModel.addElement(msg);
-                }
-                System.out.println("[UI] Repopulated chat list model.");
-            } else {
-                System.err.println("[UI] Error: ChatController is null in updateUIForRoomSwitch!");
+                for (ChatMessage msg : history) this.chatListModel.addElement(msg);
             }
 
-            // Clear internal user set and update UI list (will add self back)
-            System.out.println("[UI] Clearing user list for room switch.");
-            onlineUsers.clear();
-            updateUserListUI(); // This will redraw with just "(You)" initially
+            // --- Manage User List for the new room ---
+            System.out.println("[UI] Resetting user list for new room: " + newActiveRoom);
+            this.onlineUsers.clear(); // Clear the internal set
+            if (this.currentUserName != null) {
+                this.onlineUsers.add(this.currentUserName); // Add self immediately
+            }
+            updateUserListUI(); // Redraw the userNameArea (will show self)
+            // --- End User List Management ---
 
             // Update tab button highlighting
             System.out.println("[UI] Updating tab button highlighting.");
@@ -520,20 +512,25 @@ public class ChatRoom extends JPanel {
                     } else {
                         button.setBorder(UIManager.getBorder("Button.border"));
                     }
-                } else {
-                    System.err.println("[UI] Warning: Found null button reference for room '" + name + "' in roomButtons map.");
                 }
             });
 
-            // Scroll to bottom after repopulating
+            // Scroll chat to bottom
             SwingUtilities.invokeLater(() -> {
                 int lastIndex = chatListModel.getSize() - 1;
                 if (lastIndex >= 0) chatList.ensureIndexIsVisible(lastIndex);
             });
-            System.out.println("[UI] Finished updating UI for room switch.");
+            System.out.println("[UI] Finished updating UI for room switch to " + newActiveRoom);
         });
     }
 
+    public void clearUserList() {
+        SwingUtilities.invokeLater(() -> {
+            System.out.println("[UI] Clearing user list (explicit call).");
+            onlineUsers.clear();
+            updateUserListUI(); // Update UI to reflect empty state (will then add self if currentUsername is set)
+        });
+    }
     // --- Setters ---
     public void setChatController(ChatController controller) { this.chatController = controller; }
     public void setMainFrame(MainFrame frame) { this.mainFrame = frame; }

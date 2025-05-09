@@ -1,15 +1,24 @@
 // src/main/java/com/application/Backend/MessageData.java
 package com.application.Backend;
 
-// Define message types
+import com.google.gson.annotations.SerializedName; // Optional, but can help
+
 enum MessageType {
-    CHAT, JOIN, LEAVE, DOWNLOAD // <<< ADDED DOWNLOAD
+    CHAT, JOIN, LEAVE, DOWNLOAD, HEARTBEAT
 }
 
 public class MessageData {
+
+    // Use annotations for clarity, though often optional for simple names
+    @SerializedName("type")
     public MessageType type;
+
+    @SerializedName("sender")
     public String sender;
-    public String encryptedData; // Null for JOIN, LEAVE, DOWNLOAD
+
+    // Crucially, this field CAN be null for non-CHAT types
+    @SerializedName("encryptedData")
+    public String encryptedData;
 
     // Constructor for CHAT messages
     public MessageData(String sender, String encryptedData) {
@@ -18,16 +27,15 @@ public class MessageData {
         this.encryptedData = encryptedData;
     }
 
-    // Constructor for JOIN/LEAVE/DOWNLOAD messages
     public MessageData(MessageType type, String sender) {
         if (type == MessageType.CHAT) {
             throw new IllegalArgumentException("Use the constructor with encryptedData for CHAT messages.");
         }
         this.type = type;
         this.sender = sender;
-        this.encryptedData = null; // Not used for these system messages
+        this.encryptedData = null;
     }
 
-    // Default constructor for GSON/JSON deserialization
+    // Default constructor REQUIRED for Gson deserialization
     public MessageData() {}
 }
