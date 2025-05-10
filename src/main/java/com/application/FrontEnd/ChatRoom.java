@@ -300,44 +300,54 @@ public class ChatRoom extends JPanel {
 
     public void addUserToList(String username) {
         if (username == null || username.trim().isEmpty()) return;
-        SwingUtilities.invokeLater(() -> { // Ensure set modification and UI update are on EDT
-            boolean added = onlineUsers.add(username);
-            if (added) {
-                System.out.println("[UI] Adding user to list: " + username);
-                updateUserListUI();
+        SwingUtilities.invokeLater(() -> {
+            // Check if the user is ACTUALLY added or if it was already there
+            boolean newAddition = onlineUsers.add(username);
+            if (newAddition) {
+                System.out.println("[UI ChatRoom] User '" + username + "' ADDED to internal set. Calling updateUserListUI.");
+                updateUserListUI(); // This MUST be called to refresh the JTextArea
             } else {
-                System.out.println("[UI] User already in list: " + username);
+                System.out.println("[UI ChatRoom] User '" + username + "' was already in internal set. List should be up-to-date.");
             }
         });
     }
 
     public void removeUserFromList(String username) {
         if (username == null || username.trim().isEmpty()) return;
-        SwingUtilities.invokeLater(() -> { // Ensure set modification and UI update are on EDT
-            boolean removed = onlineUsers.remove(username);
-            if (removed) {
-                System.out.println("[UI] Removing user from list: " + username);
-                updateUserListUI();
+        SwingUtilities.invokeLater(() -> {
+            boolean wasRemoved = onlineUsers.remove(username);
+            if (wasRemoved) {
+                System.out.println("[UI ChatRoom] User '" + username + "' REMOVED from internal set. Calling updateUserListUI.");
+                updateUserListUI(); // This MUST be called
             } else {
-                System.out.println("[UI] User not found in list to remove: " + username);
+                System.out.println("[UI ChatRoom] User '" + username + "' not found in internal set for removal.");
             }
         });
     }
 
 
-
     private void updateUserListUI() {
-        // Assumed to be called on EDT by the public methods above
+        // This method is already invoked on EDT by its callers (addUserToList, removeUserFromList, updateUIForRoomSwitch)
+        System.out.println("[UI ChatRoom] Updating userNameArea. Current onlineUsers: " + onlineUsers); // Log current set
         userNameArea.setText(""); // Clear existing text
-        // Always add self first, clearly marked
-        if (currentUserName != null) {
+
+        // Add current user (self) first, if available
+        if (currentUserName != null && !currentUserName.trim().isEmpty()) {
             userNameArea.append("- " + currentUserName + " (You)\n");
+        } else {
+            System.out.println("[UI ChatRoom] currentUserName is null/empty during updateUserListUI.");
         }
-        // Add other online users from the set, sorted
+
+        // Add other distinct users from the set
         onlineUsers.stream()
-                .filter(user -> !user.equals(currentUserName)) // Exclude self
+                .filter(user -> !user.equals(currentUserName)) // Ensure self isn't added twice if logic elsewhere adds it
                 .sorted(String.CASE_INSENSITIVE_ORDER)
-                .forEach(user -> userNameArea.append("- " + user + "\n"));
+                .forEach(user -> {
+                    System.out.println("[UI ChatRoom] Appending to userNameArea: - " + user);
+                    userNameArea.append("- " + user + "\n");
+                });
+        // userNameArea.revalidate(); // JTextArea usually revalidates/repaints itself on setText/append
+        // userNameArea.repaint();
     }
 
     // --- Event Listeners ---
@@ -495,12 +505,12 @@ public class ChatRoom extends JPanel {
             }
 
             // --- Manage User List for the new room ---
-            System.out.println("[UI] Resetting user list for new room: " + newActiveRoom);
-            this.onlineUsers.clear(); // Clear the internal set
-            if (this.currentUserName != null) {
-                this.onlineUsers.add(this.currentUserName); // Add self immediately
+            System.out.println("[UI ChatRoom] Resetting user list for new room: " + newActiveRoom);
+            onlineUsers.clear();
+            if (this.currentUserName != null) { // Guard against null
+                onlineUsers.add(this.currentUserName);
             }
-            updateUserListUI(); // Redraw the userNameArea (will show self)
+            updateUserListUI(); // CRITICAL: This updates the JTextArea
             // --- End User List Management ---
 
             // Update tab button highlighting
@@ -531,6 +541,16 @@ public class ChatRoom extends JPanel {
             updateUserListUI(); // Update UI to reflect empty state (will then add self if currentUsername is set)
         });
     }
+    //todo: monis, uncomment the if block and print statement after implementing UI overhaul and adding download file stuff
+    public void fileShareAttemptFinished() {
+        SwingUtilities.invokeLater(() -> { // Ensure UI-related state is updated on EDT
+//            if (concurrentUploads > 0) {
+//                concurrentUploads--;
+//            }
+//            System.out.println("[UI ChatRoom] A file share attempt processing finished. Concurrent uploads now: " + concurrentUploads);
+        });
+    }
+
     // --- Setters ---
     public void setChatController(ChatController controller) { this.chatController = controller; }
     public void setMainFrame(MainFrame frame) { this.mainFrame = frame; }

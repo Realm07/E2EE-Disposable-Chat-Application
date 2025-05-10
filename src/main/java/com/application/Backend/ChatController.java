@@ -2,6 +2,7 @@
 package com.application.Backend;
 
 import java.awt.GridLayout;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,10 +25,16 @@ import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage; // E
 
 import java.util.Timer;
 import java.util.TimerTask;
-/**
- * Controller coordinating actions between the Swing UI and backend services.
- * Manages application state, including per-room chat history.
- */
+
+import java.io.File;
+import java.io.FileOutputStream; // For writing encrypted temp file
+import java.io.FileInputStream;  // For reading original file
+import java.io.IOException;
+import java.nio.file.Files;      // For deleting temp file
+import java.nio.file.Path;
+import java.security.MessageDigest; // For SHA-256 hash
+import java.security.SecureRandom;
+
 public class ChatController implements NetworkListener { // Ensure NetworkListener interface exists
 
     // References to UI components
@@ -68,10 +75,13 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
     }
     // --- End Public Room Handling ---
 
+    private final FileUploader fileUploader; // <<< NEW: Instance of FileUploader
+
     public ChatController(MainFrame mainFrame) {
         this.mainFrame = mainFrame;
-        this.encryptionService = new EncryptionService(); // Ensure constructor works
-        this.networkService = new PusherService(this); // Ensure constructor accepts NetworkListener
+        this.encryptionService = new EncryptionService();
+        this.networkService = new PusherService(this);
+        this.fileUploader = new FileUploader(); // <<< Initialize FileUploader
         System.out.println("[Controller] Initialized.");
     }
 
@@ -374,6 +384,129 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
         });
     }
 
+// --- File Sharing Logic ---
+
+    /**
+     * Called by ChatRoom UI to initiate a file share.
+     * This method will handle encryption, uploading, and sending the offer.
+     * It should be run on a background thread by the ChatRoom UI.
+     *
+     * @param roomName The current active room.
+     * @param senderUsername The user initiating the share.
+     * @param fileToShare The original, unencrypted file selected by the user.
+     */
+    public void initiateFileShare(String roomName, String senderUsername, File fileToShare) {
+        System.out.println("[Controller] Initiating file share for '" + fileToShare.getName() + "' in room '" + roomName + "' by user '" + senderUsername + "'");
+
+        if (!this.activeRoomName.equals(roomName) || !this.currentUsername.equals(senderUsername)) {
+            System.err.println("[Controller] File share request mismatch: Active/Current user/room does not match request parameters.");
+            if (chatRoomUI != null) chatRoomUI.fileShareAttemptFinished(); // Decrement counter
+            return;
+        }
+
+        File encryptedTempFile = null;
+        try {
+            // 1. Generate a one-time AES key for this file
+            SecureRandom random = SecureRandom.getInstanceStrong();
+            byte[] oneTimeKeyBytes = new byte[32]; // 256-bit AES key
+            random.nextBytes(oneTimeKeyBytes);
+            // System.out.println("[Controller] Generated one-time file key (bytes length): " + oneTimeKeyBytes.length);
+
+            // 2. Encrypt the file content with this one-time key
+            // For simplicity, we'll use a slightly different method in EncryptionService
+            // or do it directly here for file streams. Let's assume EncryptionService can handle File objects.
+            // Create a temporary file for the encrypted content.
+            encryptedTempFile = File.createTempFile("enc_share_", "_" + fileToShare.getName());
+            // System.out.println("[Controller] Created temp encrypted file: " + encryptedTempFile.getAbsolutePath());
+
+            // This part needs careful implementation in EncryptionService or here:
+            // Option A: Modify EncryptionService to take File in, File out, and a SecretKey
+            // encryptionService.encryptFile(fileToShare, encryptedTempFile, new SecretKeySpec(oneTimeKeyBytes, "AES"));
+
+            // Option B: Simpler stream encryption (less robust error handling here for brevity)
+            // This uses the ONE-TIME KEY, NOT the room key for file content.
+            System.out.println("[Controller] Encrypting file content with one-time key...");
+            encryptionService.encryptFileWithGivenKey(fileToShare, encryptedTempFile, oneTimeKeyBytes);
+            System.out.println("[Controller] File content encrypted to temp file.");
+
+
+            // 3. Encrypt the one-time file key with the current room's E2EE key
+            //    The room key MUST be derived and available in encryptionService.
+            if (encryptionService.isRoomKeySet()) { // Add a check in EncryptionService
+                String encryptedOneTimeFileKeyBase64 = encryptionService.encryptDataWithRoomKey(oneTimeKeyBytes);
+                System.out.println("[Controller] One-time file key encrypted with room key.");
+
+                // 4. Upload the encryptedTempFile to transfer.sh
+                System.out.println("[Controller] Uploading encrypted file to transfer.sh...");
+                String downloadUrl = fileUploader.uploadFile(encryptedTempFile, fileToShare.getName() + ".enc"); // Add .enc
+                System.out.println("[Controller] Encrypted file uploaded. Download URL: " + downloadUrl);
+
+                // 5. (Optional) Calculate hash of the ORIGINAL unencrypted file
+                // String originalFileHash = calculateSHA256(fileToShare); // Implement calculateSHA256
+
+                // 6. Create and send the FILE_SHARE_OFFER message
+                MessageData fileOfferMessage = new MessageData(
+                        senderUsername,
+                        fileToShare.getName(),
+                        fileToShare.length(),
+                        downloadUrl,
+                        encryptedOneTimeFileKeyBase64,
+                        null // Pass originalFileHash here if calculated
+                );
+                networkService.sendChatMessage(fileOfferMessage);
+                System.out.println("[Controller] File share offer sent for '" + fileToShare.getName() + "'");
+
+                // Notify UI locally (optional, as sender will also receive their own offer)
+                // if (chatRoomUI != null) {
+                //    chatRoomUI.displaySystemMessage("You started sharing '" + fileToShare.getName() + "'.");
+                // }
+
+            } else {
+                throw new IllegalStateException("Room key is not set. Cannot encrypt file key.");
+            }
+
+        } catch (Exception e) {
+            System.err.println("[Controller] Error during file share process for '" + fileToShare.getName() + "': " + e.getMessage());
+            e.printStackTrace();
+            // Notify UI of failure
+            if (chatRoomUI != null) {
+                final String fName = fileToShare.getName();
+                SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage("Failed to share file: " + fName));
+            }
+        } finally {
+            // 7. Clean up the temporary encrypted file
+            if (encryptedTempFile != null && encryptedTempFile.exists()) {
+                if (encryptedTempFile.delete()) {
+                    System.out.println("[Controller] Deleted temporary encrypted file: " + encryptedTempFile.getName());
+                } else {
+                    System.err.println("[Controller] Failed to delete temporary encrypted file: " + encryptedTempFile.getName());
+                }
+            }
+            // 8. Notify ChatRoom UI that the attempt is finished to decrement counter
+            if (chatRoomUI != null) {
+                chatRoomUI.fileShareAttemptFinished();
+            }
+        }
+    }
+
+    // Helper to calculate SHA-256 hash (optional)
+    private String calculateSHA256(File file) throws IOException, NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] byteArray = new byte[8192]; // Read in 8KB chunks
+            int bytesCount;
+            while ((bytesCount = fis.read(byteArray)) != -1) {
+                digest.update(byteArray, 0, bytesCount);
+            }
+        }
+        byte[] bytes = digest.digest();
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+    // --- End File Sharing Logic ---
     @Override
     public void onMessageReceived(MessageData messageData) {
         if (messageData == null) { // Check if parsing failed in PusherService
@@ -393,11 +526,20 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
             return;
         }
 
-        // --- Ignore Self System Messages (Re-add for cleaner logs/behaviour) ---
-        if (sender.equals(this.currentUsername) && messageData.type != MessageType.CHAT) {
-            System.out.println("[Controller] Ignoring self-sent system message: " + messageData.type);
+        // Ignore self-sent system messages to avoid feedback loops for announcements.
+        // Keep ignoring self for CHAT is a UI preference (do you want to see your own messages echoed?).
+        // For this fix, we specifically need to process HEARTBEATS from self (to update timestamp),
+        // but not act on self-JOIN/LEAVE as announcements.
+        if (messageData.sender.equals(this.currentUsername) &&
+                (messageData.type == MessageType.JOIN ||
+                        messageData.type == MessageType.LEAVE ||
+                        messageData.type == MessageType.DOWNLOAD)) { // Keep ignoring self-DOWNLOAD display
+            System.out.println("[Controller] Ignoring self-sent system message: " + messageData.type + " from " + messageData.sender);
             return;
         }
+        // Self-HEARTBEATS will pass through to update the local timestamp.
+        // Self-CHAT will also pass through to be added to history and displayed (if not filtered by a different mechanism).
+
 
         // Optionally ignore self-sent system messages if needed, but chat messages are fine.
         // if (sender.equals(this.currentUsername) && messageData.type != MessageType.CHAT) {
@@ -437,50 +579,92 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
                 break; // <<< Ensure break statements! >>>
 
             case JOIN:
-                userLastHeartbeat.put(sender, System.currentTimeMillis()); // Record heartbeat/join time
+                final String joiningUser = sender;
+                userLastHeartbeat.put(joiningUser, System.currentTimeMillis()); // Track new user
                 SwingUtilities.invokeLater(() -> {
                     if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        if (!sender.equals(this.currentUsername)) {
-                            chatRoomUI.displaySystemMessage(sender + " has joined the room.");
+                        if (!joiningUser.equals(this.currentUsername)) { // Message from ANOTHER user joining
+                            chatRoomUI.displaySystemMessage(joiningUser + " has joined the room.");
+                            chatRoomUI.addUserToList(joiningUser);
+                            // This client (currentUsername) is already in the room.
+                            // Send a HEARTBEAT to let the new user (joiningUser) know about us.
+                            System.out.println("[Controller] User '" + joiningUser + "' joined. Sending our own HEARTBEAT as '" + this.currentUsername + "' to announce presence.");
+                            sendSystemMessage(MessageType.HEARTBEAT);
+                        } else {
+                            // This is our OWN JOIN message coming back.
+                            // We don't need to display "[currentUsername] has joined".
+                            // Our presence in the list is handled by updateUIForRoomSwitch in onConnected.
+                            System.out.println("[Controller] Received own JOIN message for " + joiningUser + ". No action needed here as UI already updated.");
+                            // chatRoomUI.addUserToList(joiningUser); // Already done in updateUIForRoomSwitch
                         }
-                        chatRoomUI.addUserToList(sender); // Add to UI list
                     }
                 });
                 break;
 
             case LEAVE:
-                userLastHeartbeat.remove(sender); // Remove from heartbeat tracking
+                final String leavingUser = sender;
+                userLastHeartbeat.remove(leavingUser);
                 SwingUtilities.invokeLater(() -> {
                     if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        chatRoomUI.displaySystemMessage(sender + " has left the room.");
-                        chatRoomUI.removeUserFromList(sender);
-                    }
-                });
-            break;
-            case DOWNLOAD:
-                SwingUtilities.invokeLater(() -> {
-                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        if (!sender.equals(this.currentUsername)) { // Don't announce own download
-                            chatRoomUI.displaySystemMessage(sender + " has downloaded the chat history.");
-                        }
+                        chatRoomUI.displaySystemMessage(leavingUser + " has left the room.");
+                        chatRoomUI.removeUserFromList(leavingUser);
                     }
                 });
                 break;
             case HEARTBEAT:
-                // System.out.println("[Controller Heartbeat] Received HEARTBEAT from " + sender);
-                userLastHeartbeat.put(sender, System.currentTimeMillis()); // Update last seen time
-                // Ensure user is in the list if a heartbeat is received (e.g., if we joined late)
-                if (chatRoomUI != null && !sender.equals(this.currentUsername)) { // Don't re-add self from own heartbeat
+                final String heartbeatSender = sender;
+                userLastHeartbeat.put(heartbeatSender, System.currentTimeMillis());
+                // If this heartbeat is from another user, ensure they are in our list.
+                // This handles cases where we join and they were already there but haven't sent a JOIN to us.
+                if (!heartbeatSender.equals(this.currentUsername)) {
                     SwingUtilities.invokeLater(() -> {
-                        if (chatRoomUI != null) chatRoomUI.addUserToList(sender);
+                        if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                            // System.out.println("[Controller] Processing HEARTBEAT from " + heartbeatSender + ", ensuring they are in list.");
+                            chatRoomUI.addUserToList(heartbeatSender);
+                        }
                     });
+                } else {
+                    // It's our own heartbeat echoed back. Fine, timestamp is updated.
+                    // System.out.println("[Controller] Processed own HEARTBEAT for " + heartbeatSender);
                 }
+                break;
+            case FILE_SHARE_OFFER: // <<< NEW: Handle incoming file share offer >>>
+                System.out.println("[Controller] Received FILE_SHARE_OFFER from " + sender + " for file: " + messageData.originalFilename);
+                final MessageData offer = messageData; // Capture for lambda
+                SwingUtilities.invokeLater(() -> {
+                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                        // Let ChatRoom UI decide how to display this.
+                        // It will need a way to render this custom message.
+                        // For now, just a system message to confirm receipt.
+                        chatRoomUI.displaySystemMessage(sender + " is offering to share file: '" +
+                                offer.originalFilename + "' (" + formatFileSize(offer.originalFileSize) + ").");
+                        // The actual download logic will be triggered by UI interaction in MessageCellRenderer
+                        // For now, the controller just relays the offer info.
+                        // We can also directly add it to the chatListModel if MessageCellRenderer is ready
+                        // chatRoomUI.appendFileOfferMessage(offer); // (New method needed in ChatRoom)
+                    }
+                });
+                break;
+            case DOWNLOAD:
+                SwingUtilities.invokeLater(() -> {
+                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                        if (!sender.equals(this.currentUsername)) {
+                            chatRoomUI.displaySystemMessage(sender + " has downloaded the chat history.");
+                        }
+                    }
+                });
                 break;
             default:
                 System.err.println("[Controller] Received message with unknown type: " + messageData.type);
         }
     }
 
+    private String formatFileSize(long size) {
+        if (size < 1024) return size + " B";
+        int exp = (int) (Math.log(size) / Math.log(1024));
+        String pre = "KMGTPE".charAt(exp-1) + "";
+        return String.format("%.1f %sB", size / Math.pow(1024, exp), pre);
+    }
 
     @Override
     public void onError(final String message, final Exception e) {

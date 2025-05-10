@@ -50,85 +50,116 @@ public class PusherService {
     }
 
     public void connect() {
-        System.out.println("[PusherService] >> connect() method entered.");
+        System.out.println("[PusherService connect] Attempting to establish connection for channel: " + this.channelName);
+        if (this.channelName == null || this.channelName.equals("default-public-channel") || this.channelName.startsWith("chat-room-default-public-channel")) {
+            System.err.println("[PusherService connect] Cannot connect: Channel name invalid. Current: " + this.channelName);
+            if (listener != null) listener.onError("Connection attempt failed: Invalid channel name.", null);
+            return;
+        }
+
+        // --- Disconnect and nullify any existing client FIRST ---
         if (this.pusherClient != null) {
-            System.out.println("[PusherService] Existing pusherClient found. Attempting full cleanup...");
-            // Remove all bindings for the old client explicitly
-            // This requires knowing the channel name it was subscribed to.
-            // If we don't have the old channel name reliably, this is harder.
-            // For now, we rely on the new instance strategy.
-
-            // Ensure all listeners are removed for the old client.
-            // The Pusher library should ideally handle this on disconnect, but let's be explicit.
-            // This is tricky as listeners are usually on channels.
-            // pusherClient.getConnection().unbind(ConnectionState.ALL, existingConnectionEventListener); // Would need to store listener
-
-            this.pusherClient.disconnect();
-            System.out.println("[PusherService] Old pusherClient disconnect requested.");
-            this.pusherClient = null;
-            this.isConnectedFlag = false;
-            System.out.println("[PusherService] Old pusherClient nullified.");
-            // Give a slightly longer pause to ensure resources MIGHT be released by the OS/library
-            try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            System.out.println("[PusherService connect] Existing pusherClient found. Disconnecting and nullifying it.");
+            try {
+                // It's important that listeners on the old client's connection
+                // don't interfere or try to act on a client that's being replaced.
+                // The ConnectionEventListener is tied to the connect call, so a new one is made for the new client.
+                this.pusherClient.disconnect(); // Request the old client to disconnect
+                System.out.println("[PusherService connect] Old pusherClient.disconnect() called.");
+            } catch (Exception e) {
+                System.err.println("[PusherService connect] Exception during old client disconnect: " + e.getMessage());
+            } finally {
+                this.pusherClient = null; // Dereference the old client
+                this.isConnectedFlag = false; // Reset flag
+                System.out.println("[PusherService connect] Old pusherClient instance nullified.");
+            }
+            // A very brief pause to potentially allow underlying network resources to settle.
+            // This is speculative and not a guaranteed fix for all scenarios.
+            try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
+        // --- End Disconnect Old Client ---
 
-
-        // --- Create and initialize a NEW Pusher client instance ---
-        System.out.println("[PusherService] Initializing NEW Pusher WebSocket client instance.");
+        System.out.println("[PusherService connect] Initializing NEW Pusher WebSocket client instance for: " + this.channelName);
         try {
-            PusherOptions options = new PusherOptions().setCluster(PUSHER_CLUSTER);
-            options.setEncrypted(true); // Use WSS
-            this.pusherClient = new Pusher(PUSHER_KEY, options); // Create new instance
-            System.out.println("[PusherService] NEW Pusher WebSocket client instance initialized.");
+            PusherOptions options = new PusherOptions().setCluster(PUSHER_CLUSTER).setEncrypted(true);
+            // *** Create the NEW Pusher client instance ***
+            this.pusherClient = new Pusher(PUSHER_KEY, options);
+            System.out.println("[PusherService connect] NEW Pusher WebSocket client instance created.");
         } catch (Exception e) {
-            System.err.println("[PusherService] CRITICAL ERROR Initializing NEW Pusher WebSocket client: " + e.getMessage());
+            System.err.println("[PusherService connect] CRITICAL ERROR Initializing NEW Pusher WebSocket client: " + e.getMessage());
             if (listener != null) listener.onError("Pusher WebSocket Client Init Failed", e);
-            return; // Cannot proceed if client init fails
+            return;
         }
-        // --- End New Client Initialization ---
 
-
-        System.out.println("[PusherService] Attempting to connect WebSocket for channel: " + this.channelName);
+        System.out.println("[PusherService connect] Connecting new client instance for channel: " + this.channelName);
+        // Each time we connect with a new client instance, we provide a new ConnectionEventListener instance.
         this.pusherClient.connect(new ConnectionEventListener() {
             @Override
             public void onConnectionStateChange(ConnectionStateChange change) {
-                System.out.println("[PusherService] State changed: " + change.getPreviousState() + " -> " + change.getCurrentState());
-                isConnectedFlag = (change.getCurrentState() == ConnectionState.CONNECTED);
+                // Important: Check if this event is for the CURRENT pusherClient instance,
+                // especially if there were rapid connect/disconnects.
+                // However, since we nullify the old one, this listener should only be active for the current one.
+                System.out.println("[PusherService Listener] State changed: " +
+                        change.getPreviousState() + " -> " + change.getCurrentState() +
+                        " for channel " + PusherService.this.channelName); // Log current channel context
 
-                if (isConnectedFlag) {
-                    System.out.println("[PusherService] Successfully connected. Subscribing to channel...");
-                    subscribeToChannel(); // Subscribe automatically when connected
-                    if (listener != null) listener.onConnected();
+                PusherService.this.isConnectedFlag = (change.getCurrentState() == ConnectionState.CONNECTED);
+
+                if (PusherService.this.isConnectedFlag) {
+                    System.out.println("[PusherService Listener] Successfully connected for " + PusherService.this.channelName + ". Subscribing...");
+                    subscribeToChannel(); // This will use the current this.pusherClient
+                    if (PusherService.this.listener != null) PusherService.this.listener.onConnected();
                 } else if (change.getCurrentState() == ConnectionState.DISCONNECTED &&
-                        change.getPreviousState() != ConnectionState.DISCONNECTED && // Avoid multiple disconnect events
-                        change.getPreviousState() != null) { // Ensure previous state was not also null (initial)
-                    System.out.println("[PusherService] Disconnected from WebSocket.");
-                    if (listener != null) listener.onDisconnected();
+                        change.getPreviousState() != ConnectionState.DISCONNECTED &&
+                        change.getPreviousState() != null ) { // Avoid multiple/initial disconnect events
+                    System.out.println("[PusherService Listener] Disconnected event for " + PusherService.this.channelName);
+                    if (PusherService.this.listener != null) PusherService.this.listener.onDisconnected();
                 }
             }
 
             @Override
             public void onError(String message, String code, Exception e) {
-                System.err.println("[PusherService] Connection error: " + message + " Code: " + code);
-                if (e != null) e.printStackTrace(); // Print stack trace for Pusher errors
-                if (listener != null) listener.onError("Pusher Connection Error: " + message, e);
+                System.err.println("[PusherService Listener] Connection error for " + PusherService.this.channelName + ": " + message + " Code: " + code);
+                if (e != null) e.printStackTrace();
+                if (PusherService.this.listener != null) PusherService.this.listener.onError("Pusher Connection Error: " + message, e);
             }
         }, ConnectionState.ALL);
+        System.out.println("[PusherService connect] Connect call initiated for: " + this.channelName);
     }
 
     public void disconnect() {
-        System.out.println("[PusherService] >> disconnect() method entered.");
+        System.out.println("[PusherService disconnect] Public disconnect called.");
+        internalDisconnect(false); // 'false' means not part of a new connection sequence
+    }
+    /**
+     * Internal disconnect logic.
+     * @param isPartOfNewConnectionCycle true if called immediately before creating a new client instance.
+     */
+    private void internalDisconnect(boolean isPartOfNewConnectionCycle) {
         if (this.pusherClient != null) {
-            // No need to explicitly unsubscribe if we are creating a new client instance on each connect.
-            // The old client instance will be garbage collected along with its subscriptions.
-            System.out.println("[PusherService] Disconnecting WebSocket client instance...");
-            this.pusherClient.disconnect();
-            this.pusherClient = null; // Nullify the reference
-            this.isConnectedFlag = false;
-            System.out.println("[PusherService] WebSocket client instance disconnected and nullified.");
+            System.out.println("[PusherService internalDisconnect] Disconnecting existing WebSocket client instance. Part of new connection: " + isPartOfNewConnectionCycle);
+            // The main goal is to stop the client and allow it to be GC'd.
+            // Explicit unsubscription or listener unbinding on the old instance is
+            // less critical if we ensure it's fully replaced.
+            try {
+                this.pusherClient.disconnect();
+                // If we really want to wait for the DISCONNECTED state before nullifying.
+                // This could block if the state change never comes.
+                // A more robust way involves CountDownLatch if waiting is essential.
+                // For now, aggressive nullification after requesting disconnect.
+                // System.out.println("[PusherService internalDisconnect] Waiting for old client to fully disconnect...");
+                // Thread.sleep(200); // Short, speculative wait
+
+            } catch (Exception e) {
+                System.err.println("[PusherService internalDisconnect] Exception during old client disconnect: " + e.getMessage());
+            } finally {
+                this.pusherClient = null; // Most important step
+                this.isConnectedFlag = false;
+                System.out.println("[PusherService internalDisconnect] Current pusherClient field (old instance) nullified.");
+            }
         } else {
-            System.out.println("[PusherService] No active WebSocket client to disconnect.");
-            this.isConnectedFlag = false; // Ensure flag is false
+            System.out.println("[PusherService internalDisconnect] No active WebSocket client to disconnect.");
+            this.isConnectedFlag = false; // Ensure flag is consistent
         }
     }
 
