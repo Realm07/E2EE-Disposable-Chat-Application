@@ -19,7 +19,6 @@ import javax.swing.SwingUtilities;
 import com.application.FrontEnd.ChatRoom;
 import com.application.FrontEnd.MainFrame;
 // Assuming MessageCellRenderer and its inner ChatMessage class are correctly located
-import com.application.FrontEnd.components.MessageCellRenderer;
 import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage; // Explicit import for clarity
 
 /**
@@ -447,5 +446,20 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
              return new ArrayList<>(roomChatHistories.getOrDefault(roomName, List.of())); // Use List.of() for empty immutable list if Java 9+
              // Or for older Java: return new ArrayList<>(roomChatHistories.getOrDefault(roomName, Collections.emptyList()));
          }
+    }
+
+    public void acceptPrivateChat(String fromUser, String proposedRoomName, String proposedPassword) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'acceptPrivateChat'");
+    }
+
+    public void declinePrivateChat(String fromUser, String proposedRoomName) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'declinePrivateChat'");
+    }
+
+    public void requestPrivateChat(String actualUsername) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'requestPrivateChat'");
     }
 }

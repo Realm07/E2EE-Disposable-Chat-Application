@@ -17,6 +17,9 @@ public class MainFrame extends JFrame {
     private PrivateRoomPage privateRoomPage; // Added
     private ChatController chatController; // Add reference to the controller
     private InfoPage infoPage;
+    private SettingRoom settingRoom;
+
+
     public static Font sansationRegular; // Make fonts accessible
     public static Font sansationBold;
 
@@ -196,13 +199,19 @@ public class MainFrame extends JFrame {
         }
     }
 
-    // --- Main Entry Point (Load fonts before creating UI) ---
+    public void switchToSettingRoom(){
+        System.out.println("[MainFrame] Switching to Setting panel.");
+        remove(chatRoom);
+        settingRoom = new SettingRoom(this);
+        add(settingRoom);
+        revalidate();
+        repaint();
+
+    }
+
     public static void main(String[] args) {
-        // Ensure UI creation happens on the Event Dispatch Thread (EDT)
         SwingUtilities.invokeLater(() -> {
-            // Load fonts first
             loadCustomFonts();
-            // Then create the frame which uses the fonts
             new MainFrame();
         });
     }
