@@ -115,14 +115,15 @@ public class ChatRoom extends JPanel {
         this.mainFrame = mainFrame;
         this.chatController = chatController;
         this.currentUserName = initialUsername;
-        this.activeRoomName = initialRoomName;
+        this.activeRoomName = initialRoomName; // Set activeRoomName first
 
         this.roomButtons = new HashMap<>();
         this.onlineUsers = new HashSet<>();
 
         this.chatListModel = new DefaultListModel<>();
         this.chatList = new JList<>(this.chatListModel);
-        // Initial user in list (will be refined by updateUserList calls)
+
+        // Initial user list population done by updateUserList after UI setup
         if (this.currentUserName != null) {
             this.onlineUsers.add(this.currentUserName);
         }
@@ -134,12 +135,16 @@ public class ChatRoom extends JPanel {
         add(layeredPane, BorderLayout.CENTER);
 
         backgroundPanel = new BackgroundImagePanel(DEFAULT_BACKGROUND_IMAGE_PATH);
+        // Bounds will be set by resizeAndLayoutLayeredComponents
         layeredPane.add(backgroundPanel, JLayeredPane.DEFAULT_LAYER);
 
-        createMainPanel(); // Builds mainContentPanel
+        // --- createMainPanel now correctly calls createLeftPanel and createRightPanel ---
+        // --- which internally use and initialize their components.                ---
+        createMainPanel(); // This method calls createLeftPanel and createRightPanel
+        // mainContentPanel bounds will be set by resizeAndLayoutLayeredComponents
         layeredPane.add(mainContentPanel, JLayeredPane.PALETTE_LAYER);
 
-        // Resize listener for layered pane
+
         layeredPane.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
@@ -148,17 +153,16 @@ public class ChatRoom extends JPanel {
             @Override
             public void componentShown(ComponentEvent e) {
                 SwingUtilities.invokeLater(ChatRoom.this::resizeAndLayoutLayeredComponents);
+                // Initial UI update once shown and sized
+                if (ChatRoom.this.activeRoomName != null) { // In componentShown listener
+                    SwingUtilities.invokeLater(() -> {
+                        reInitializeForNewSession(ChatRoom.this.currentUserName,
+                                ChatRoom.this.activeRoomName,
+                                new ArrayList<>(ChatRoom.this.onlineUsers));
+                    });
+                }
             }
         });
-
-        // Initial UI setup based on initial room
-        if (this.activeRoomName != null) {
-            setChatScrollPaneTitle(this.activeRoomName);
-            // The controller should provide the initial user list for the initial room.
-            // This might happen in a subsequent call after connection establishment.
-            // For now, initialize with current user only.
-            updateUserList(new ArrayList<>(this.onlineUsers));
-        }
         addEventListeners();
     }
 
@@ -176,11 +180,12 @@ public class ChatRoom extends JPanel {
 
     public void createMainPanel() {
         mainContentPanel = new JPanel(new BorderLayout());
-        mainContentPanel.setOpaque(false); // Main content is transparent to see background
+        mainContentPanel.setOpaque(false);
         mainContentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
+        // --- Crucial: Create left and right panels HERE ---
+        JPanel leftColumnPanel = createLeftPanel();   // This will init roomTabPanel, addNewRoomButton
         JPanel rightColumnPanel = createRightPanel();
-        JPanel leftColumnPanel = createLeftPanel();
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setLeftComponent(leftColumnPanel);
@@ -189,8 +194,8 @@ public class ChatRoom extends JPanel {
         splitPane.setResizeWeight(0.75);   // Left panel gets more resize weight
         splitPane.setOpaque(false);
         splitPane.setContinuousLayout(true);
-        splitPane.setBorder(null);
-        splitPane.setDividerSize(8);
+        splitPane.setDividerLocation(0.75); // Set as a proportion
+        splitPane.setResizeWeight(0.75);
 
         mainContentPanel.add(splitPane, BorderLayout.CENTER);
     }
@@ -198,35 +203,43 @@ public class ChatRoom extends JPanel {
     private JPanel createLeftPanel() {
         JPanel leftPanel = new JPanel(new BorderLayout(0, 5));
         leftPanel.setOpaque(false);
-        leftPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5)); // Padding on right for divider
+        leftPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
 
         // --- Room Tab Panel ---
-        roomTabPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 3)); // Added small vgap
-        roomTabPanel.setOpaque(false); // Panel itself is transparent
-        roomTabPanel.setBorder(BorderFactory.createEmptyBorder(5,5,5,5)); // Padding for content
+        roomTabPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 3));
+        roomTabPanel.setOpaque(false);
+        roomTabPanel.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
 
-        if (this.activeRoomName != null) {
-            addRoomTabInternal(activeRoomName); // Add initial room tab
-        }
-        addNewRoomButton = new CustomButton("+", 40, 28, new Color(150, 100, 150)); // Slightly smaller
+        // <<< Initialize addNewRoomButton FIRST >>>
+        addNewRoomButton = new CustomButton("+", 40, 28, new Color(150, 100, 150));
         addNewRoomButton.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        addNewRoomButton.setBorder(BorderFactory.createEmptyBorder(0,0,2,0)); // Align better
-        roomTabPanel.add(addNewRoomButton);
+        addNewRoomButton.setBorder(BorderFactory.createEmptyBorder(0,0,2,0));
+        // Don't add it to roomTabPanel yet if you want initial tabs to appear before it.
+        // We will add it at the end after all initial/dynamic tabs.
+
+        // <<< Now add the initial room tab if activeRoomName is set >>>
+        System.out.println("[UI createLeftPanel] activeRoomName before adding initial tab: " + this.activeRoomName);
+        if (this.activeRoomName != null) {
+            addRoomTabInternal(activeRoomName); // This will now correctly find addNewRoomButton if logic needs it, or just add
+        }roomTabPanel.add(addNewRoomButton);
 
         // Scrollable container for room tabs with custom background
         JScrollPane roomTabScrollPanel = new JScrollPane(roomTabPanel){
             private final int cornerRadius = 20;
-            private final float fillAlpha = 120 / 255.0f; // Semi-transparent
+            private final float fillAlpha = 120 / 255.0f;
             private final Color fillColor = new Color(80, 80, 80);
             @Override
             protected void paintComponent(Graphics g) {
+                // Paint custom background FIRST
                 Graphics2D g2d = (Graphics2D) g.create();
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
                 g2d.setColor(fillColor);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
                 g2d.dispose();
-                super.paintComponent(g); // Paints children (roomTabPanel)
+
+                // THEN let JScrollPane paint its children (viewport, scrollbars, and the roomTabPanel inside viewport)
+                super.paintComponent(g);
             }
         };
         roomTabScrollPanel.setOpaque(false);
@@ -738,10 +751,27 @@ public class ChatRoom extends JPanel {
         }
     }
 
-    private void addRoomTabInternal(String roomName) {
-        if (roomName == null || roomButtons.containsKey(roomName)) return;
 
-        Random random = new Random(roomName.hashCode()); // Consistent color per room name
+    public void addRoomTab(String roomName) {
+        SwingUtilities.invokeLater(() -> addRoomTabInternal(roomName));
+    }
+    private void addRoomTabInternal(String roomName) {
+        if (roomName == null || roomName.trim().isEmpty()) {
+            System.err.println("[UI addRoomTabInternal] Attempted to add tab with null/empty name. Skipping.");
+            return;
+        }
+        if (roomButtons.containsKey(roomName)) {
+            System.out.println("[UI addRoomTabInternal] Tab button for " + roomName + " already in roomButtons map. Skipping add.");
+            return; // Important to prevent adding the same button object multiple times to the panel
+        }
+        if (roomTabPanel == null) {
+            System.err.println("[UI addRoomTabInternal] CRITICAL: roomTabPanel is null. Cannot add tab for " + roomName);
+            return;
+        }
+        // addNewRoomButton should now be initialized before this method is called for the first tab
+
+        System.out.println("[UI addRoomTabInternal] Creating tab button for: " + roomName);
+        Random random = new Random(roomName.hashCode()); // Use roomName's hash for more consistent "random" color per room
         CustomButton tabButton = new CustomButton(roomName, 100, 28,
                 new Color(100 + random.nextInt(100), 100 + random.nextInt(100), 100 + random.nextInt(100)));
         tabButton.setForeground(Color.WHITE);
@@ -751,22 +781,71 @@ public class ChatRoom extends JPanel {
         });
         roomButtons.put(roomName, tabButton);
 
-        int addButtonIndex = -1;
-        for (int i = 0; i < roomTabPanel.getComponentCount(); i++) {
-            if (roomTabPanel.getComponent(i) == addNewRoomButton) {
-                addButtonIndex = i;
-                break;
+
+        // Find the "+" button to insert before it.
+        int insertAtIndex = -1;
+        if (addNewRoomButton != null) { // Check if addNewRoomButton exists in the panel
+            for (int i = 0; i < roomTabPanel.getComponentCount(); i++) {
+                if (roomTabPanel.getComponent(i) == addNewRoomButton) {
+                    insertAtIndex = i;
+                    break;
+                }
             }
         }
-        roomTabPanel.add(tabButton, (addButtonIndex != -1) ? addButtonIndex : roomTabPanel.getComponentCount());
+
+        if (insertAtIndex != -1) {
+            System.out.println("[UI addRoomTabInternal] Inserting " + roomName + " tab at index " + insertAtIndex + " (before '+').");
+            roomTabPanel.add(tabButton, insertAtIndex);
+        } else {
+            // If "+" button wasn't found (shouldn't happen if createLeftPanel is correct)
+            // or if addNewRoomButton is null, add to the end of whatever is there.
+            // This case might still occur if clearAllRoomTabs didn't re-add it properly before this is called.
+            System.out.println("[UI addRoomTabInternal] '+' button not found in panel or null. Adding " + roomName + " tab to end.");
+            roomTabPanel.add(tabButton);
+        }
+
         roomTabPanel.revalidate();
         roomTabPanel.repaint();
+        System.out.println("[UI addRoomTabInternal] Tab button for " + roomName + " added. Panel revalidated.");
     }
 
-    public void addRoomTab(String roomName) {
-        SwingUtilities.invokeLater(() -> addRoomTabInternal(roomName));
-    }
 
+    public void clearAllRoomTabs() {
+        SwingUtilities.invokeLater(() -> {
+            if (roomTabPanel == null || roomButtons == null || addNewRoomButton == null) {
+                System.err.println("[ChatRoom clearAllRoomTabs] Cannot clear: essential components are null.");
+                return;
+            }
+            System.out.println("[ChatRoom UI] Clearing all room tabs.");
+
+            Component[] components = roomTabPanel.getComponents();
+            for (Component comp : components) {
+                if (comp != addNewRoomButton) { // Keep the '+' button instance
+                    roomTabPanel.remove(comp);
+                }
+            }
+            // If addNewRoomButton was accidentally removed, or to be sure it's there:
+            // Ensure addNewRoomButton is present (it might have been removed if not careful)
+            boolean plusButtonPresent = false;
+            for (Component comp : roomTabPanel.getComponents()) {
+                if (comp == addNewRoomButton) {
+                    plusButtonPresent = true;
+                    break;
+                }
+            }
+            if (!plusButtonPresent) {
+                System.out.println("[ChatRoom clearAllRoomTabs] Re-adding '+' button.");
+                roomTabPanel.add(addNewRoomButton); // Ensure '+' button is always the last one after clearing
+            }
+
+
+            roomButtons.clear(); // Clear the tracking map
+
+            roomTabPanel.revalidate();
+            roomTabPanel.repaint();
+            System.out.println("[ChatRoom clearAllRoomTabs] Tabs cleared. '+' button ensured.");
+        });
+    }
     // Update this method to accept the list of users for the new room from the controller
     public void updateUIForRoomSwitch(String newActiveRoom, List<String> usersInNewRoom) {
         SwingUtilities.invokeLater(() -> {
@@ -830,17 +909,6 @@ public class ChatRoom extends JPanel {
 
             mainContentPanel.revalidate(); // Revalidate main layout
             mainContentPanel.repaint();
-        });
-    }
-
-    public void clearAllRoomTabs() {
-        SwingUtilities.invokeLater(() -> {
-            if (roomTabPanel == null || roomButtons == null || addNewRoomButton == null) return;
-            roomTabPanel.removeAll();
-            roomButtons.clear();
-            roomTabPanel.add(addNewRoomButton); // Re-add the "+" button
-            roomTabPanel.revalidate();
-            roomTabPanel.repaint();
         });
     }
 
