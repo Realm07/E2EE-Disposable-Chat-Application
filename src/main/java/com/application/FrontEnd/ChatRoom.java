@@ -550,7 +550,7 @@ public class ChatRoom extends JPanel {
 //            System.out.println("[UI ChatRoom] A file share attempt processing finished. Concurrent uploads now: " + concurrentUploads);
         });
     }
-
+    public void displayPrivateChatRequest(String fromUser, String proposedRoomName, String proposedPassword){}
     // --- Setters ---
     public void setChatController(ChatController controller) { this.chatController = controller; }
     public void setMainFrame(MainFrame frame) { this.mainFrame = frame; }

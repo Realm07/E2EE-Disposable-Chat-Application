@@ -35,6 +35,9 @@ import java.nio.file.Path;
 import java.security.MessageDigest; // For SHA-256 hash
 import java.security.SecureRandom;
 
+import java.util.Random; // For generating simple passwords/room suffixes
+import java.util.UUID;   // For more unique room name parts
+
 public class ChatController implements NetworkListener { // Ensure NetworkListener interface exists
 
     // References to UI components
@@ -52,6 +55,8 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
 
     // Store chat history per room
     private Map<String, List<ChatMessage>> roomChatHistories = new HashMap<>();
+
+    private Map<String, String> pendingSentPrivateChatProposals = new HashMap<>();
 
     // --- Heartbeat Management ---
     private Timer heartbeatSendTimer;
@@ -162,29 +167,41 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
     public void leaveRoom() {
         System.out.println("[Controller] User '" + (currentUsername != null ? currentUsername : "Unknown") + "' initiated leaving via button.");
         stopHeartbeatTimers(); // Stop heartbeats
-        if (currentUsername != null) {
+
+        if (currentUsername != null) { // Only send LEAVE if a user is actually set
             sendSystemMessage(MessageType.LEAVE); // Send LEAVE before actual disconnect
-        }
-        if (networkService != null) networkService.disconnect();if (chatRoomUI != null && currentUsername != null) {
-            chatRoomUI.displaySystemMessage(currentUsername + " is leaving the application.");
         } else {
-            System.out.println("[Controller] Cannot display leaving message: currentUsername=" + currentUsername + ", chatRoomUI=" + (chatRoomUI != null));
+            System.out.println("[Controller] Cannot send LEAVE message: currentUsername is null.");
         }
+
+        // Disconnect the network service
         if (networkService != null) {
-            System.out.println("[Controller] Disconnecting network service...");
+            System.out.println("[Controller] Disconnecting network service due to leaveRoom()...");
             networkService.disconnect();
-            System.out.println("[Controller] Network service disconnect requested.");
+            System.out.println("[Controller] Network service disconnect requested via leaveRoom.");
         } else {
             System.out.println("[Controller] Network service is null, cannot disconnect.");
         }
 
-        // Clear state *after* potential UI message and disconnect call
+        // Display local "You have left" message *after* attempting to send LEAVE and disconnect
+        // This ensures it doesn't interfere with the network operations
+        if (chatRoomUI != null && this.currentUsername != null) { // Check currentUsername before it's nulled
+            final String userWhoLeft = this.currentUsername; // Capture for lambda
+            SwingUtilities.invokeLater(() -> {
+                if(chatRoomUI != null) { // Re-check UI in case of rapid operations
+                    chatRoomUI.displaySystemMessage("You (" + userWhoLeft + ") have left the application.");
+                }
+            });
+        }
+
+        // Clear state
         this.currentUsername = null;
         this.activeRoomName = null;
-        this.chatRoomUI = null;
+        this.chatRoomUI = null; // Release UI reference
         joinedRoomNames.clear();
-        roomChatHistories.clear(); // Clear stored history
-        // encryptionService.clearKeys(); // If applicable
+        roomChatHistories.clear();
+        pendingSentPrivateChatProposals.clear(); // Clear any pending private chat offers
+        userLastHeartbeat.clear(); // Clear heartbeat tracking
 
         System.out.println("[Controller] State cleared. Switching to login page.");
         if (mainFrame != null) {
@@ -384,6 +401,107 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
         });
     }
 
+    // --- Private Chat Initiation and Handling ---
+
+    /**
+     * Called by ChatRoom UI (User A - Initiator) to request a private chat with another user.
+     * @param targetUsername The user to invite to a private chat (User B).
+     */
+    public void requestPrivateChat(String targetUsername) {
+        if (currentUsername == null || activeRoomName == null) {
+            showErrorDialog("Cannot initiate private chat: Not fully connected.");
+            return;
+        }
+        if (currentUsername.equals(targetUsername)) {
+            showErrorDialog("You cannot start a private chat with yourself.");
+            return;
+        }
+
+        System.out.println("[Controller] User '" + currentUsername + "' requests private chat with '" + targetUsername + "' from room '" + activeRoomName + "'");
+
+        // 1. Generate a unique proposed room name and a simple password
+        String proposedRoomSuffix = UUID.randomUUID().toString().substring(0, 8);
+        String proposedPrivateRoomName = "private-" + currentUsername.replaceAll("[^a-zA-Z0-9]", "") +
+                "-" + targetUsername.replaceAll("[^a-zA-Z0-9]", "") +
+                "-" + proposedRoomSuffix;
+        proposedPrivateRoomName = proposedPrivateRoomName.toLowerCase();
+
+        Random random = new Random();
+        String proposedPassword = String.format("%04d-%04d", random.nextInt(10000), random.nextInt(10000));
+
+        pendingSentPrivateChatProposals.put(proposedPrivateRoomName, proposedPassword);
+        System.out.println("[Controller] Generated private room: " + proposedPrivateRoomName + " with temp pass (stored locally).");
+
+        // 2. Create and send the PRIVATE_CHAT_REQUEST message
+        // *** CORRECTED CONSTRUCTOR CALL ***
+        MessageData requestMsg = new MessageData(
+                this.currentUsername,       // sender = User A
+                targetUsername,             // recipient = User B
+                proposedPrivateRoomName,
+                proposedPassword
+        );
+        // The type (PRIVATE_CHAT_REQUEST) is set *inside* that MessageData constructor.
+
+        System.out.println("[Controller] Sending PRIVATE_CHAT_REQUEST to " + targetUsername + " for room " + proposedPrivateRoomName);
+        boolean sent = networkService.sendChatMessage(requestMsg);
+
+        if (sent) {
+            if (chatRoomUI != null) {
+                final String msg = "Private chat request sent to " + targetUsername + " for room " + proposedPrivateRoomName;
+                SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage(msg));
+            }
+        } else {
+            showErrorDialog("Failed to send private chat request to " + targetUsername + ".");
+            pendingSentPrivateChatProposals.remove(proposedPrivateRoomName);
+        }
+    }
+
+    /**
+     * Called by ChatRoom UI (User B - Recipient) when they accept a private chat invitation.
+     * @param initiatorUsername User A who sent the request.
+     * @param acceptedRoomName The name of the private room they are accepting.
+     * @param passwordForAcceptedRoom The password User B received in the request.
+     */
+    public void acceptPrivateChat(String initiatorUsername, String acceptedRoomName, String passwordForAcceptedRoom) {
+        if (currentUsername == null) return; // Should not happen if UI allows accept
+
+        System.out.println("[Controller] User '" + currentUsername + "' ACCEPTS private chat with '" + initiatorUsername + "' for room: " + acceptedRoomName);
+
+        // 1. Send PRIVATE_CHAT_ACCEPTED message back to User A
+        MessageData acceptMsg = new MessageData(
+                MessageType.PRIVATE_CHAT_ACCEPTED,
+                this.currentUsername, // sender = User B
+                initiatorUsername,    // recipient = User A
+                acceptedRoomName      // roomNameContext = the accepted room
+        );
+        System.out.println("[Controller] Sending PRIVATE_CHAT_ACCEPTED to " + initiatorUsername);
+        networkService.sendChatMessage(acceptMsg); // Send on current room's channel (where A is)
+
+        // 2. User B (this client) joins the new private room
+        System.out.println("[Controller] User '" + currentUsername + "' now joining accepted private room: " + acceptedRoomName);
+        joinOrSwitchToRoom(acceptedRoomName, passwordForAcceptedRoom);
+    }
+
+    /**
+     * Called by ChatRoom UI (User B - Recipient) when they decline a private chat invitation.
+     * @param initiatorUsername User A who sent the request.
+     * @param declinedRoomName The name of the private room they are declining.
+     */
+    public void declinePrivateChat(String initiatorUsername, String declinedRoomName) {
+        if (currentUsername == null) return;
+
+        System.out.println("[Controller] User '" + currentUsername + "' DECLINES private chat with '" + initiatorUsername + "' for room: " + declinedRoomName);
+
+        MessageData declineMsg = new MessageData(
+                MessageType.PRIVATE_CHAT_DECLINED,
+                this.currentUsername, // sender = User B
+                initiatorUsername,    // recipient = User A
+                declinedRoomName      // roomNameContext = the declined room
+        );
+        System.out.println("[Controller] Sending PRIVATE_CHAT_DECLINED to " + initiatorUsername);
+        networkService.sendChatMessage(declineMsg);
+    }
+
 // --- File Sharing Logic ---
 
     /**
@@ -506,6 +624,7 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
         }
         return sb.toString();
     }
+
     // --- End File Sharing Logic ---
     @Override
     public void onMessageReceived(MessageData messageData) {
@@ -653,6 +772,70 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
                         }
                     }
                 });
+                break;
+            case PRIVATE_CHAT_REQUEST:
+                // This client is potentially User B (the recipient)
+                final String requestSender = sender; // User A
+                final String requestRecipient = messageData.recipient;
+                final String proposedRoom = messageData.proposedRoomName;
+                final String proposedPass = messageData.proposedRoomPassword; // Plaintext password from proposal
+
+                if (this.currentUsername != null && this.currentUsername.equals(requestRecipient)) {
+                    System.out.println("[Controller] Received PRIVATE_CHAT_REQUEST from '" + requestSender + "' for me (" + currentUsername + ")");
+                    SwingUtilities.invokeLater(() -> {
+                        if (chatRoomUI != null) {
+                            // UI needs to show a prompt to accept/decline
+                            chatRoomUI.displayPrivateChatRequest(requestSender, proposedRoom, proposedPass);
+                        }
+                    });
+                } else {
+                    // Not for me, or I'm not logged in. Ignore.
+                    // System.out.println("[Controller] Received PRIVATE_CHAT_REQUEST not intended for me, or I'm not logged in.");
+                }
+                break;
+
+            case PRIVATE_CHAT_ACCEPTED:
+                // This client is potentially User A (the initiator)
+                final String acceptorUsername = sender; // User B
+                final String acceptedRecipient = messageData.recipient;
+                final String acceptedRoom = messageData.proposedRoomName; // This is the key to get the password
+
+                if (this.currentUsername != null && this.currentUsername.equals(acceptedRecipient)) {
+                    System.out.println("[Controller] Received PRIVATE_CHAT_ACCEPTED from '" + acceptorUsername + "' for room: " + acceptedRoom);
+                    String originalPassword = pendingSentPrivateChatProposals.remove(acceptedRoom); // Retrieve and remove
+
+                    if (originalPassword != null) {
+                        SwingUtilities.invokeLater(() -> {
+                            if (chatRoomUI != null) {
+                                chatRoomUI.displaySystemMessage(acceptorUsername + " accepted your private chat for room: " + acceptedRoom + ". Joining now...");
+                            }
+                        });
+                        // User A now joins the private room it proposed
+                        joinOrSwitchToRoom(acceptedRoom, originalPassword);
+                    } else {
+                        System.err.println("[Controller] Error: Received ACCEPT for room '" + acceptedRoom + "' but no pending proposal/password found.");
+                        SwingUtilities.invokeLater(() -> {
+                            if (chatRoomUI != null) chatRoomUI.displaySystemMessage("Error joining accepted private chat: Proposal details lost.");
+                        });
+                    }
+                }
+                break;
+
+            case PRIVATE_CHAT_DECLINED:
+                // This client is potentially User A (the initiator)
+                final String declinerUsername = sender; // User B
+                final String declinedRecipient = messageData.recipient;
+                final String declinedRoomCtx = messageData.proposedRoomName;
+
+                if (this.currentUsername != null && this.currentUsername.equals(declinedRecipient)) {
+                    System.out.println("[Controller] Received PRIVATE_CHAT_DECLINED from '" + declinerUsername + "' for room proposal: " + declinedRoomCtx);
+                    pendingSentPrivateChatProposals.remove(declinedRoomCtx); // Clean up proposal
+                    SwingUtilities.invokeLater(() -> {
+                        if (chatRoomUI != null) {
+                            chatRoomUI.displaySystemMessage(declinerUsername + " declined your private chat request for room: " + declinedRoomCtx);
+                        }
+                    });
+                }
                 break;
             default:
                 System.err.println("[Controller] Received message with unknown type: " + messageData.type);
