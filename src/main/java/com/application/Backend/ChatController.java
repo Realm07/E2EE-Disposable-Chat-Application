@@ -2,13 +2,23 @@
 package com.application.Backend;
 
 import java.awt.GridLayout;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List; // Required for List
+import java.util.List;
 import java.util.Map;
-import java.util.Set; // Required for HashSet
+import java.util.Objects;
+import java.util.Random;
+import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.UUID;
 
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -20,53 +30,29 @@ import javax.swing.SwingUtilities;
 import com.application.FrontEnd.ChatRoom;
 import com.application.FrontEnd.MainFrame;
 // Assuming MessageCellRenderer and its inner ChatMessage class are correctly located
-import com.application.FrontEnd.components.MessageCellRenderer;
-import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage; // Explicit import for clarity
+import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage;
 
-import java.util.Timer;
-import java.util.TimerTask;
+public class ChatController implements NetworkListener {
 
-import java.io.File;
-import java.io.FileOutputStream; // For writing encrypted temp file
-import java.io.FileInputStream;  // For reading original file
-import java.io.IOException;
-import java.nio.file.Files;      // For deleting temp file
-import java.nio.file.Path;
-import java.security.MessageDigest; // For SHA-256 hash
-import java.security.SecureRandom;
-
-import java.util.Random; // For generating simple passwords/room suffixes
-import java.util.UUID;   // For more unique room name parts
-
-public class ChatController implements NetworkListener { // Ensure NetworkListener interface exists
-
-    // References to UI components
     private MainFrame mainFrame;
-    private ChatRoom chatRoomUI; // Null until user is in the chat room
+    private ChatRoom chatRoomUI;
 
-    // References to Backend services (Ensure these classes exist and are implemented)
     private final EncryptionService encryptionService;
     private final PusherService networkService;
+    private final FileUploader fileUploader;
 
-    // State
     private String currentUsername;
-    private String activeRoomName; // Name of the currently connected/viewed room
-    private Set<String> joinedRoomNames = new HashSet<>(); // Track rooms user has joined in UI
-
-    // Store chat history per room
+    private String activeRoomName;
+    private Set<String> joinedRoomNames = new HashSet<>();
     private Map<String, List<ChatMessage>> roomChatHistories = new HashMap<>();
-
     private Map<String, String> pendingSentPrivateChatProposals = new HashMap<>();
 
-    // --- Heartbeat Management ---
     private Timer heartbeatSendTimer;
-    private Map<String, Long> userLastHeartbeat = new HashMap<>(); // Username -> Timestamp
+    private Map<String, Long> userLastHeartbeat = new HashMap<>();
     private Timer userTimeoutCheckTimer;
-    private static final long HEARTBEAT_INTERVAL_MS = 20 * 1000; // Send heartbeat every 20 seconds
-    private static final long USER_TIMEOUT_THRESHOLD_MS = HEARTBEAT_INTERVAL_MS * 3; // Timeout if no heartbeat for 60s
-    // --- End Heartbeat Management ---
+    private static final long HEARTBEAT_INTERVAL_MS = 20 * 1000;
+    private static final long USER_TIMEOUT_THRESHOLD_MS = HEARTBEAT_INTERVAL_MS * 3 + 5000; // Slightly more than 3 intervals
 
-    // --- Public Room Handling ---
     private static final Map<String, String> PUBLIC_ROOM_KEYS = new HashMap<>();
     static {
         PUBLIC_ROOM_KEYS.put("Alpha",   "PublicAlphaKey_!@#");
@@ -75,24 +61,19 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
         PUBLIC_ROOM_KEYS.put("Delta",   "PublicDeltaKey_-+=");
         PUBLIC_ROOM_KEYS.put("Echo",    "PublicEchoKey_{}|");
     }
-    private boolean isPublicRoom(String roomName) {
-        return PUBLIC_ROOM_KEYS.containsKey(roomName);
-    }
-    // --- End Public Room Handling ---
-
-    private final FileUploader fileUploader; // <<< NEW: Instance of FileUploader
 
     public ChatController(MainFrame mainFrame) {
         this.mainFrame = mainFrame;
-        this.encryptionService = new EncryptionService();
-        this.networkService = new PusherService(this);
-        this.fileUploader = new FileUploader(); // <<< Initialize FileUploader
+        this.encryptionService = new EncryptionService(); // Ensure this class is fully implemented
+        this.networkService = new PusherService(this);   // Ensure this class is fully implemented
+        this.fileUploader = new FileUploader();           // Ensure this class is fully implemented
         System.out.println("[Controller] Initialized.");
     }
 
-    /**
-     * Called by LoginPage for initial join. Switches UI and delegates connection.
-     */
+    private boolean isPublicRoom(String roomName) {
+        return PUBLIC_ROOM_KEYS.containsKey(roomName);
+    }
+
     public void joinInitialRoom(String username, String roomName, String password) {
         System.out.println("[Controller] Initial Join attempt: user=" + username + ", room=" + roomName);
         if (username.isEmpty() || roomName.isEmpty() || password.isEmpty()) {
@@ -100,13 +81,12 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
             return;
         }
         this.currentUsername = username;
-        mainFrame.switchToChatRoom(this.currentUsername, roomName); // UI switch first
-        joinOrSwitchToRoom(roomName, password); // Backend connection/switch
+        java.util.List<String> initialUserList = new java.util.ArrayList<>(); // Explicit java.util
+        if (this.currentUsername != null) initialUserList.add(this.currentUsername);
+        mainFrame.switchToChatRoom(this.currentUsername, roomName, initialUserList); // PASS AS java.util.List<String>
+        joinOrSwitchToRoom(roomName, password);
     }
 
-    /**
-     * Called by PublicServerRoom for public room join. Switches UI and delegates connection.
-     */
     public void joinPublicRoom(String username, String roomName) {
         System.out.println("[Controller] PUBLIC Room Join attempt: user=" + username + ", room=" + roomName);
         if (username.isEmpty() || roomName.isEmpty()) {
@@ -118,274 +98,251 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
             return;
         }
         this.currentUsername = username;
-        mainFrame.switchToChatRoom(this.currentUsername, roomName); // UI switch first
         String predefinedPassword = PUBLIC_ROOM_KEYS.get(roomName);
         if (predefinedPassword == null) {
-             showErrorDialog("Internal Error: Missing key for public room '" + roomName + "'.");
-             return;
+            showErrorDialog("Internal Error: Missing key for public room '" + roomName + "'.");
+            return;
         }
-        joinOrSwitchToRoom(roomName, predefinedPassword); // Backend connection/switch
+        java.util.List<String> initialUserList = new java.util.ArrayList<>(); // Explicit java.util
+        if (this.currentUsername != null) initialUserList.add(this.currentUsername);
+        mainFrame.switchToChatRoom(this.currentUsername, roomName, initialUserList); // PASS AS java.util.List<String>
+        joinOrSwitchToRoom(roomName, predefinedPassword);
     }
 
-    /**
-     * Called by ChatRoom to send a message. Encrypts and sends via network service.
-     */
     public void sendMessage(String plainTextMessage) {
         if (plainTextMessage == null || plainTextMessage.trim().isEmpty()) return;
-        if (!networkService.isConnected() || activeRoomName == null) {
+        if (!networkService.isConnectedExplicit() || activeRoomName == null) {
             String errorMsg = activeRoomName == null ? "Not connected to any room." : "Not connected to room '" + activeRoomName + "'.";
             showErrorDialog(errorMsg + " Cannot send message.");
+            if (chatRoomUI != null) chatRoomUI.displaySystemMessage("Failed to send: Not connected.");
             return;
         }
         if (this.currentUsername == null) {
             showErrorDialog("Internal error: Username not set.");
             return;
         }
-        System.out.println("[Controller] Sending message: " + plainTextMessage);
         try {
             String encryptedBase64 = encryptionService.encrypt(plainTextMessage);
-            // Ensure MessageData class exists and constructor matches
-            MessageData messageData = new MessageData(this.currentUsername, encryptedBase64);
-            System.out.println("[Controller] Attempting send to room: " + activeRoomName + ", channel: " + networkService.getChannelName());
+            MessageData messageData = new MessageData(this.currentUsername, encryptedBase64, this.activeRoomName);
             boolean sendInitiated = networkService.sendChatMessage(messageData);
             if (!sendInitiated) {
-                 showErrorDialog("Failed to initiate sending message (Network error). Please try again.");
-            } else {
-                 System.out.println("[Controller] Message send initiated successfully.");
+                showErrorDialog("Failed to initiate sending message (Network error). Please try again.");
+                if (chatRoomUI != null) chatRoomUI.displaySystemMessage("Failed to send: Network issue.");
             }
         } catch (Exception e) {
             System.err.println("[Controller] Error encrypting/sending message: " + e.getMessage());
             e.printStackTrace();
             showErrorDialog("Error sending message: " + e.getMessage());
+            if (chatRoomUI != null) chatRoomUI.displaySystemMessage("Failed to send: Encryption error.");
         }
     }
 
-
-    /**
-     * Called by ChatRoom leave button. Disconnects, clears all state, switches UI to login.
-     */
     public void leaveRoom() {
         System.out.println("[Controller] User '" + (currentUsername != null ? currentUsername : "Unknown") + "' initiated leaving via button.");
-        stopHeartbeatTimers(); // Stop heartbeats
+        stopHeartbeatTimers();
 
-        if (currentUsername != null) { // Only send LEAVE if a user is actually set
-            sendSystemMessage(MessageType.LEAVE); // Send LEAVE before actual disconnect
-        } else {
-            System.out.println("[Controller] Cannot send LEAVE message: currentUsername is null.");
+        if (currentUsername != null && networkService.isConnectedExplicit()) {
+            sendSystemMessage(MessageType.LEAVE);
         }
+        networkService.disconnect(); // Request disconnect
 
-        // Disconnect the network service
-        if (networkService != null) {
-            System.out.println("[Controller] Disconnecting network service due to leaveRoom()...");
-            networkService.disconnect();
-            System.out.println("[Controller] Network service disconnect requested via leaveRoom.");
-        } else {
-            System.out.println("[Controller] Network service is null, cannot disconnect.");
-        }
-
-        // Display local "You have left" message *after* attempting to send LEAVE and disconnect
-        // This ensures it doesn't interfere with the network operations
-        if (chatRoomUI != null && this.currentUsername != null) { // Check currentUsername before it's nulled
-            final String userWhoLeft = this.currentUsername; // Capture for lambda
+        // UI actions after network actions
+        if (chatRoomUI != null && this.currentUsername != null) {
+            final String userWhoLeft = this.currentUsername;
             SwingUtilities.invokeLater(() -> {
-                if(chatRoomUI != null) { // Re-check UI in case of rapid operations
+                if(chatRoomUI != null) {
                     chatRoomUI.displaySystemMessage("You (" + userWhoLeft + ") have left the application.");
                 }
             });
         }
+        clearLocalStateAndSwitchToLogin();
+    }
 
-        // Clear state
+    private void clearLocalStateAndSwitchToLogin() {
         this.currentUsername = null;
         this.activeRoomName = null;
-        this.chatRoomUI = null; // Release UI reference
+        // this.chatRoomUI = null; // Do not nullify UI if MainFrame manages its lifecycle.
+        // MainFrame will call setActiveChatRoomUI(null) if needed or reinitialize.
         joinedRoomNames.clear();
         roomChatHistories.clear();
-        pendingSentPrivateChatProposals.clear(); // Clear any pending private chat offers
-        userLastHeartbeat.clear(); // Clear heartbeat tracking
+        pendingSentPrivateChatProposals.clear();
+        userLastHeartbeat.clear(); // Cleared by stopHeartbeatTimers
 
         System.out.println("[Controller] State cleared. Switching to login page.");
         if (mainFrame != null) {
             SwingUtilities.invokeLater(() -> mainFrame.switchToLoginPage());
-        } else {
-            System.err.println("[Controller] MainFrame reference is null, cannot switch to login page.");
         }
     }
 
-    /**
-     * Handles application shutdown cleanup (network disconnect).
-     */
     public void handleApplicationShutdown() {
         System.out.println("[Controller] Application shutdown requested.");
-        stopHeartbeatTimers(); // Stop heartbeats
+        stopHeartbeatTimers();
         if (currentUsername != null && networkService != null && networkService.isConnectedExplicit()) {
-            sendSystemMessage(MessageType.LEAVE);
+            sendSystemMessage(MessageType.LEAVE); // Try to send leave message
+            try { Thread.sleep(200); } catch (InterruptedException ignored) {} // Short delay for message to go
         }
         if (networkService != null) networkService.disconnect();
         System.out.println("[Controller] Shutdown cleanup complete.");
     }
 
-    /**
-     * Sets the reference to the active ChatRoom UI instance. Called by MainFrame.
-     */
     public void setActiveChatRoomUI(ChatRoom chatRoomUI) {
         this.chatRoomUI = chatRoomUI;
-        // Check if already connected to the room when UI becomes active
         if (this.chatRoomUI != null) {
-             if (networkService.isConnected() && activeRoomName != null &&
-                 networkService.getChannelName() != null &&
-                 networkService.getChannelName().contains(activeRoomName)) {
-                this.chatRoomUI.displaySystemMessage("[System] Connected to room: " + activeRoomName);
-             }
+            if (networkService.isConnectedExplicit() && activeRoomName != null &&
+                    networkService.getChannelName() != null &&
+                    networkService.getChannelName().contains(activeRoomName)) {
+                // If UI is set and we are already connected, ensure UI reflects this.
+                // Typically onConnected handles this, but this is a safeguard.
+                System.out.println("[Controller] ChatRoom UI set and already connected to: " + activeRoomName + ". Updating UI.");
+                this.chatRoomUI.updateUIForRoomSwitch(activeRoomName, getOnlineUsersForCurrentRoom());
+                this.chatRoomUI.displaySystemMessage("[System] Reconnected to room: " + activeRoomName);
+            } else if (activeRoomName != null) {
+                // If UI is set but not connected, but an activeRoomName is known (e.g. mid-reconnect)
+                // ensure the UI is at least pointing to the right room name and has a minimal user list
+                System.out.println("[Controller] ChatRoom UI set for room: " + activeRoomName + ", but not yet connected. Pre-setting UI.");
+                List<String> selfList = new ArrayList<>();
+                if(this.currentUsername != null) selfList.add(this.currentUsername);
+                this.chatRoomUI.updateUIForRoomSwitch(activeRoomName, selfList);
+            }
         }
     }
 
-    /**
-     * Core logic for connecting/subscribing to a room channel.
-     * Disconnects previous, derives key, sets network channel, initiates connection.
-     * Notifies UI to add the visual tab immediately.
-     */
     public void joinOrSwitchToRoom(String roomName, String password) {
         System.out.println("[Controller] Attempting to join/switch backend to room: " + roomName);
-        stopHeartbeatTimers(); // Stop heartbeats for the old room
 
-        if (networkService.isConnected()) {
-            if(this.currentUsername != null && this.activeRoomName != null) {
-                sendSystemMessage(MessageType.LEAVE); // Leave current room
+        if (networkService.isConnectedExplicit()) {
+            // If connected to a different room, send LEAVE for the old room
+            if(this.currentUsername != null && this.activeRoomName != null && !this.activeRoomName.equals(roomName)) {
+                System.out.println("[Controller] Sending LEAVE for old room: " + this.activeRoomName);
+                sendSystemMessage(MessageType.LEAVE);
             }
-            System.out.println("[Controller] Disconnecting from previous channel: " + networkService.getChannelName());
-            networkService.disconnect();
+            System.out.println("[Controller] Disconnecting from previous channel: " + (networkService.getChannelName() != null ? networkService.getChannelName() : "N/A"));
+            networkService.disconnect(); // Disconnect before joining new one
             try { Thread.sleep(300); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
         }
 
+        stopHeartbeatTimers(); // Stop and clear heartbeats for the old room AFTER sending LEAVE
+
         System.out.println("[Controller] Deriving key for room: " + roomName);
-        if (!encryptionService.deriveRoomKey(roomName, password)) {
+        if (!encryptionService.deriveRoomKey(roomName, password)) { // Ensure deriveRoomKey sets internal state in encryptionService
             showErrorDialog("Failed to derive key for room '" + roomName + "'. Check password.");
-            // If key fails, we are effectively not in any room
             this.activeRoomName = null;
-            // Could potentially tell UI to reset highlighting if needed
-            return;
-        }
-        System.out.println("[Controller] Key derived successfully for room: " + roomName);
-
-        try {
-            this.activeRoomName = roomName; // Update active room STATE before connecting
-            System.out.println("[Controller] >> Set activeRoomName to: " + this.activeRoomName);
-
-            networkService.setChannelName(roomName); // Tell service channel name
-            String actualChannelName = networkService.getChannelName(); // Verify
-            System.out.println("[Controller] >> networkService channel name is now: " + actualChannelName);
-
-            if (actualChannelName == null || !actualChannelName.contains(roomName)) {
-                 System.err.println("[Controller] !!! Channel name error after setting! Expected containing '" + roomName + "', got '" + actualChannelName + "'. Aborting connect.");
-                 showErrorDialog("Internal error setting up network channel for room '" + roomName + "'.");
-                 this.activeRoomName = null; // Revert active room state
-                 return;
+            if (chatRoomUI != null) { // Revert UI to a state that indicates failure or no room
+                chatRoomUI.displaySystemMessage("Failed to join " + roomName + ": Invalid credentials.");
+                chatRoomUI.setChatScrollPaneTitle("Not Connected");
+                chatRoomUI.clearUserList();
             }
-
-            System.out.println("[Controller] >> Calling networkService.connect() for channel: " + actualChannelName);
-            networkService.connect(); // Initiate asynchronous connection
-            System.out.println("[Controller] >> networkService.connect() called.");
-
-        } catch (Exception e) {
-            System.err.println("[Controller] !!! UNEXPECTED ERROR during network setup: " + e.getMessage());
-            e.printStackTrace();
-            showErrorDialog("Internal error during network setup: " + e.getMessage());
-             this.activeRoomName = null; // Revert active room state
             return;
         }
 
-        // Add the visual tab immediately for user feedback
-        if (chatRoomUI != null) {
+        this.activeRoomName = roomName; // Set active room state
+        networkService.setChannelName(roomName); // Inform network service
+
+        if (chatRoomUI != null) { // Add tab immediately
             if (!joinedRoomNames.contains(roomName)) {
-                System.out.println("[Controller] Notifying UI to add visual tab for: " + roomName);
                 chatRoomUI.addRoomTab(roomName);
                 joinedRoomNames.add(roomName);
-            } else {
-                 System.out.println("[Controller] UI tab for " + roomName + " already exists/tracked.");
             }
-            // DO NOT call updateUIForRoomSwitch here; wait for onConnected confirmation.
-        } else {
-            System.err.println("[Controller] Cannot add room tab immediately: chatRoomUI reference is null!");
+            // Preemptively update UI for the switch attempt. onConnected will refine it.
+            List<String> selfList = new ArrayList<>();
+            if (this.currentUsername != null) selfList.add(this.currentUsername);
+            chatRoomUI.updateUIForRoomSwitch(this.activeRoomName, selfList);
+            chatRoomUI.displaySystemMessage("Attempting to connect to " + this.activeRoomName + "...");
         }
-        System.out.println("[Controller] Successfully initiated join/switch logic for room: " + roomName + ". Waiting for connection events...");
+
+        System.out.println("[Controller] Initiating connection to room: " + this.activeRoomName + " on channel: " + networkService.getChannelName());
+        networkService.connect();
     }
 
-    /**
-     * Handles UI request (tab click) to switch view to an already joined room.
-     * Uses predefined key for public rooms, prompts for password for private rooms.
-     */
     public void requestRoomSwitch(String targetRoomName) {
-         System.out.println("[Controller] UI requested switch to room: " + targetRoomName);
-         // Avoid unnecessary switching if already connected to the target room
-         if (targetRoomName.equals(this.activeRoomName) && networkService.isConnected()) {
-             System.out.println("[Controller] Already connected to room: " + targetRoomName + ". Switch request ignored.");
-             // Ensure UI is correctly highlighted just in case
-             if(chatRoomUI != null) SwingUtilities.invokeLater(() -> chatRoomUI.updateUIForRoomSwitch(targetRoomName));
-             return;
-         }
+        System.out.println("[Controller] UI requested switch to room: " + targetRoomName);
+        if (Objects.equals(targetRoomName, this.activeRoomName) && networkService.isConnectedExplicit()) {
+            System.out.println("[Controller] Already connected to room: " + targetRoomName + ". Ensuring UI is current.");
+            if(chatRoomUI != null) SwingUtilities.invokeLater(() -> chatRoomUI.updateUIForRoomSwitch(targetRoomName, getOnlineUsersForCurrentRoom()));
+            return;
+        }
 
-         if (isPublicRoom(targetRoomName)) {
-             System.out.println("[Controller] Switching to public room '" + targetRoomName + "' using predefined key.");
-             String predefinedPassword = PUBLIC_ROOM_KEYS.get(targetRoomName);
-              if (predefinedPassword == null) {
-                 showErrorDialog("Internal Error: Missing key for public room '" + targetRoomName + "'.");
-                 return;
-              }
-              joinOrSwitchToRoom(targetRoomName, predefinedPassword); // Use main switch logic
-         } else {
-             // Private room: Prompt for password
-             JPasswordField passwordField = new JPasswordField(15);
-             JPanel panel = new JPanel(new GridLayout(0,1));
-             panel.add(new JLabel("Enter password for room: " + targetRoomName));
-             panel.add(passwordField);
-             SwingUtilities.invokeLater(() -> { // Show dialog on EDT
-                 passwordField.requestFocusInWindow();
-                 int result = JOptionPane.showConfirmDialog(mainFrame, panel, "Enter Room Password", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-                 if (result == JOptionPane.OK_OPTION) {
-                      char[] passwordChars = passwordField.getPassword();
-                      String password = new String(passwordChars);
-                      java.util.Arrays.fill(passwordChars, ' ');
-                      if (!password.isEmpty()) {
-                           System.out.println("[Controller] Password received for " + targetRoomName + ". Proceeding with switch.");
-                           joinOrSwitchToRoom(targetRoomName, password); // Use main switch logic
-                      } else {
-                           showErrorDialog("Password cannot be empty.");
-                           // Revert highlight back to original active room if password entry failed
-                           if (chatRoomUI != null && activeRoomName != null) { chatRoomUI.updateUIForRoomSwitch(activeRoomName); }
-                      }
-                  } else {
-                      System.out.println("[Controller] Room switch cancelled by user for room: " + targetRoomName);
-                      // Revert highlight back to original active room if user cancelled
-                      if (chatRoomUI != null && activeRoomName != null) { chatRoomUI.updateUIForRoomSwitch(activeRoomName); }
-                  }
-             });
-         }
+        final String previousActiveRoomName = this.activeRoomName; // Store for potential revert
+
+        if (isPublicRoom(targetRoomName)) {
+            String predefinedPassword = PUBLIC_ROOM_KEYS.get(targetRoomName);
+            if (predefinedPassword == null) {
+                showErrorDialog("Internal Error: Missing key for public room '" + targetRoomName + "'.");
+                return;
+            }
+            joinOrSwitchToRoom(targetRoomName, predefinedPassword);
+        } else {
+            JPasswordField passwordField = new JPasswordField(15);
+            JPanel panel = new JPanel(new GridLayout(0,1));
+            panel.add(new JLabel("Enter password for room: " + targetRoomName));
+            panel.add(passwordField);
+            SwingUtilities.invokeLater(() -> {
+                passwordField.requestFocusInWindow();
+                int result = JOptionPane.showConfirmDialog(mainFrame, panel, "Enter Room Password", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                if (result == JOptionPane.OK_OPTION) {
+                    String password = new String(passwordField.getPassword());
+                    java.util.Arrays.fill(passwordField.getPassword(), ' ');
+                    if (!password.isEmpty()) {
+                        joinOrSwitchToRoom(targetRoomName, password);
+                    } else {
+                        showErrorDialog("Password cannot be empty.");
+                        if (chatRoomUI != null && previousActiveRoomName != null) {
+                            chatRoomUI.updateUIForRoomSwitch(previousActiveRoomName, getOnlineUsersForRoom(previousActiveRoomName)); // Revert UI
+                        }
+                    }
+                } else {
+                    System.out.println("[Controller] Room switch cancelled by user for room: " + targetRoomName);
+                    if (chatRoomUI != null && previousActiveRoomName != null) {
+                        chatRoomUI.updateUIForRoomSwitch(previousActiveRoomName, getOnlineUsersForRoom(previousActiveRoomName)); // Revert UI
+                    }
+                }
+            });
+        }
     }
 
-    // --- NetworkListener Implementation ---
+    private List<String> getOnlineUsersForCurrentRoom() {
+        // Heartbeats are cleared on room switch, so this set is for the current room.
+        return new ArrayList<>(userLastHeartbeat.keySet());
+    }
+
+    private List<String> getOnlineUsersForRoom(String roomName) {
+        if (Objects.equals(roomName, this.activeRoomName)) {
+            return getOnlineUsersForCurrentRoom();
+        }
+        // If asking for a room we're not currently active in,
+        // we don't have its live user list. Return empty or just self if it's a known joined room.
+        List<String> users = new ArrayList<>();
+        if (this.currentUsername != null) users.add(this.currentUsername); // Default to self
+        return users;
+    }
+
 
     @Override
     public void onConnected() {
-        final String connectedChannel = networkService.getChannelName();
-        final String roomName = this.activeRoomName;
-        System.out.println("[Controller] Network Listener: Connected. Channel: " + connectedChannel + ", Room: " + roomName);
+        final String connectedRoomName = this.activeRoomName; // Use the state set by joinOrSwitchToRoom
+        System.out.println("[Controller] Network Listener: Connected. Expected Room: " + connectedRoomName + ", Actual Channel: " + networkService.getChannelName());
+
+        if (connectedRoomName == null || !networkService.getChannelName().contains(connectedRoomName)) {
+            System.err.println("[Controller] Connected event, but room mismatch or null state. Expected: " + connectedRoomName + ", Actual: " + networkService.getChannelName());
+            if (chatRoomUI != null) chatRoomUI.displaySystemMessage("Connection error: Room mismatch.");
+            return;
+        }
+
+        // Add self to heartbeat list for this new room
+        userLastHeartbeat.clear(); // Ensure it's clean for the new room
+        if (this.currentUsername != null) {
+            userLastHeartbeat.put(this.currentUsername, System.currentTimeMillis());
+        }
 
         SwingUtilities.invokeLater(() -> {
-            if (chatRoomUI != null && roomName != null && connectedChannel != null && connectedChannel.contains(roomName)) {
-                System.out.println("[Controller] Confirmed connection to active room: " + roomName);
-                chatRoomUI.updateUIForRoomSwitch(roomName); // Clears lists, adds self, loads history
-                chatRoomUI.displaySystemMessage("Welcome to " + roomName + "! You are connected.");
+            if (chatRoomUI != null) {
+                System.out.println("[Controller] Confirmed connection to active room: " + connectedRoomName);
+                // Update UI with current user list (which is initially just self after clearing heartbeats)
+                chatRoomUI.updateUIForRoomSwitch(connectedRoomName, getOnlineUsersForCurrentRoom());
+                chatRoomUI.displaySystemMessage("Welcome to " + connectedRoomName + "! You are connected.");
 
-                // Send JOIN message and start heartbeats
-                sendSystemMessage(MessageType.JOIN);
-                userLastHeartbeat.put(this.currentUsername, System.currentTimeMillis()); // Track self
-                startHeartbeatTimers(); // Start sending our heartbeats and checking for others
-            } else {
-                System.err.println("[Controller] Connected event: Mismatch or null state. UI: " + (chatRoomUI != null) + ", Room: " + roomName + ", Channel: " + connectedChannel);
-                if (chatRoomUI != null && roomName != null) { // Try to update UI if possible
-                    chatRoomUI.updateUIForRoomSwitch(roomName);
-                    chatRoomUI.displaySystemMessage("[Warning] Connected to " + connectedChannel + ". Expected for " + roomName);
-                }
+                sendSystemMessage(MessageType.JOIN); // Announce join to others
+                startHeartbeatTimers();              // Start heartbeats for this room
             }
         });
     }
@@ -394,21 +351,281 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
     public void onDisconnected() {
         System.out.println("[Controller] Network Listener: Disconnected!");
         stopHeartbeatTimers(); // Stop heartbeats when disconnected
+        final String disconnectedRoom = this.activeRoomName; // Capture before it might be nulled
         SwingUtilities.invokeLater(() -> {
             if (chatRoomUI != null) {
-                chatRoomUI.displaySystemMessage("[System] Disconnected from chat service.");
+                chatRoomUI.displaySystemMessage("[System] Disconnected from " + (disconnectedRoom != null ? disconnectedRoom : "chat service") + ".");
+                // Optionally clear user list on disconnect or show "offline" state
+                // chatRoomUI.clearUserList(); // Clears list except self
+                // chatRoomUI.setChatScrollPaneTitle( (disconnectedRoom != null ? disconnectedRoom : "Chat") + " (Offline)");
+            }
+        });
+        // Do not automatically switch to login here, as disconnects can be temporary.
+        // LeaveRoom handles explicit leaves. Reconnect logic might be elsewhere.
+    }
+
+    @Override
+    public void onMessageReceived(MessageData messageData) {
+        if (messageData == null || messageData.sender == null || messageData.type == null) {
+            System.err.println("[Controller] Received invalid MessageData (null sender or type).");
+            return;
+        }
+
+        final String sender = messageData.sender;
+        final String currentRoom = this.activeRoomName; // Message is for current active room
+
+        if (currentRoom == null) {
+            System.err.println("[Controller] Message received for room '" + messageData.getRoomContext() + "' but no active room locally. Ignoring.");
+            return;
+        }
+
+        // Crucial: only process messages intended for the CURRENT active room
+        // Pusher usually handles this by channel subscription, but good to double check if MessageData has room context
+        String messageRoomContext = messageData.getRoomContext(); // Assuming MessageData has this
+        if (messageRoomContext != null && !messageRoomContext.equals(currentRoom)) {
+            System.out.println("[Controller] Ignoring message for room '" + messageRoomContext + "' as current room is '" + currentRoom + "'");
+            return;
+        }
+
+
+        if (sender.equals(this.currentUsername) &&
+                (messageData.type == MessageType.JOIN ||
+                        messageData.type == MessageType.LEAVE ||
+                        messageData.type == MessageType.DOWNLOAD)) {
+            // System.out.println("[Controller] Ignoring self-sent system message: " + messageData.type);
+            return; // Own JOIN/LEAVE/DOWNLOAD usually handled or not needed to be re-processed
+        }
+
+        // System.out.println("[Controller] Processing " + messageData.type + " from " + sender + " for active room " + currentRoom);
+        switch (messageData.type) {
+            case CHAT:
+                handleChatMessage(messageData, sender, currentRoom);
+                break;
+            case JOIN:
+                handleJoinMessage(sender, currentRoom);
+                break;
+            case LEAVE:
+                handleLeaveMessage(sender, currentRoom);
+                break;
+            case HEARTBEAT:
+                handleHeartbeatMessage(sender, currentRoom);
+                break;
+            case DOWNLOAD: // User downloaded chat history
+                SwingUtilities.invokeLater(() -> {
+                    if (chatRoomUI != null && Objects.equals(currentRoom, this.activeRoomName)) {
+                        if (!sender.equals(this.currentUsername)) { // Only display if it's not self
+                            chatRoomUI.displaySystemMessage(sender + " has downloaded the chat history.");
+                        }
+                    }
+                });
+                break;
+            case FILE_SHARE_OFFER:
+                handleFileShareOffer(messageData, sender, currentRoom);
+                break;
+            case PRIVATE_CHAT_REQUEST:
+                handlePrivateChatRequest(messageData, sender, currentRoom);
+                break;
+            case PRIVATE_CHAT_ACCEPTED:
+                handlePrivateChatAccepted(messageData, sender, currentRoom);
+                break;
+            case PRIVATE_CHAT_DECLINED:
+                handlePrivateChatDeclined(messageData, sender, currentRoom);
+                break;
+            default:
+                System.err.println("[Controller] Received message with unknown type: " + messageData.type);
+        }
+    }
+
+    private void handleChatMessage(MessageData messageData, String sender, String roomForMessage) {
+        if (messageData.encryptedData == null) {
+            System.err.println("[Controller] Received CHAT message with null encryptedData from " + sender);
+            return;
+        }
+        try {
+            final String decryptedText = encryptionService.decrypt(messageData.encryptedData);
+            final ChatMessage chatMessage = new ChatMessage(sender, decryptedText, "STANDARD"); // Assuming "STANDARD" type for ChatRoom
+            synchronized(roomChatHistories) {
+                roomChatHistories.computeIfAbsent(roomForMessage, k -> new ArrayList<>()).add(chatMessage);
+            }
+            SwingUtilities.invokeLater(() -> {
+                if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                    chatRoomUI.appendMessage(sender, decryptedText, "STANDARD");
+                    if (!sender.equals(this.currentUsername)) { // Infer presence if not self
+                        chatRoomUI.addUserToList(sender);
+                        userLastHeartbeat.put(sender, System.currentTimeMillis()); // Also update heartbeat
+                    }
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("[Controller] Failed to decrypt message from " + sender + ": " + e.getMessage());
+            if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage("[Error] Could not decrypt message from " + sender + "."));
+            }
+        }
+    }
+
+    private void handleJoinMessage(String joiningUser, String roomForMessage) {
+        userLastHeartbeat.put(joiningUser, System.currentTimeMillis());
+        SwingUtilities.invokeLater(() -> {
+            if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                // This is a JOIN from another user
+                chatRoomUI.displaySystemMessage(joiningUser + " has joined the room.");
+                chatRoomUI.addUserToList(joiningUser);
+                // Send a HEARTBEAT back to announce our presence to the new user.
+                System.out.println("[Controller] User '" + joiningUser + "' joined. Sending our own HEARTBEAT as '" + this.currentUsername + "'.");
+                sendSystemMessage(MessageType.HEARTBEAT);
             }
         });
     }
 
-    // --- Private Chat Initiation and Handling ---
+    private void handleLeaveMessage(String leavingUser, String roomForMessage) {
+        userLastHeartbeat.remove(leavingUser);
+        SwingUtilities.invokeLater(() -> {
+            if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                chatRoomUI.displaySystemMessage(leavingUser + " has left the room.");
+                chatRoomUI.removeUserFromList(leavingUser);
+            }
+        });
+    }
 
-    /**
-     * Called by ChatRoom UI (User A - Initiator) to request a private chat with another user.
-     * @param targetUsername The user to invite to a private chat (User B).
-     */
+    private void handleHeartbeatMessage(String heartbeatSender, String roomForMessage) {
+        userLastHeartbeat.put(heartbeatSender, System.currentTimeMillis());
+        if (!heartbeatSender.equals(this.currentUsername)) { // If heartbeat from another user
+            SwingUtilities.invokeLater(() -> {
+                if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                    // Ensure user is in list (handles cases where JOIN might have been missed)
+                    chatRoomUI.addUserToList(heartbeatSender);
+                }
+            });
+        }
+    }
+
+    private void handleFileShareOffer(MessageData offerData, String sender, String roomForMessage) {
+        System.out.println("[Controller] Received FILE_SHARE_OFFER from " + sender + " for file: " + offerData.originalFilename); // Direct field access
+        SwingUtilities.invokeLater(() -> {
+            if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
+                // Example of using the fields directly:
+                // chatRoomUI.displaySystemMessage(sender + " is offering file: '" +
+                //                           offerData.originalFilename + "' (" + formatFileSize(offerData.originalFileSize) + ").");
+                chatRoomUI.displayFileShareOffer(offerData);
+            }
+        });
+    }
+
+    private void handlePrivateChatRequest(MessageData requestMsg, String sender, String roomForMessage) {
+        // This client is User B (recipient)
+        final String requestRecipient = requestMsg.recipient;
+        final String proposedRoom = requestMsg.proposedRoomName;
+        final String proposedPass = requestMsg.proposedRoomPassword;
+
+        if (this.currentUsername != null && this.currentUsername.equals(requestRecipient)) {
+            System.out.println("[Controller] Received PRIVATE_CHAT_REQUEST from '" + sender + "' for me (" + currentUsername + ") in room: " + proposedRoom);
+            SwingUtilities.invokeLater(() -> {
+                if (chatRoomUI != null) {
+                    chatRoomUI.displayPrivateChatRequest(sender, proposedRoom, proposedPass);
+                }
+            });
+        }
+    }
+
+    private void handlePrivateChatAccepted(MessageData acceptedMsg, String sender, String roomForMessage) {
+        // This client is User A (initiator)
+        final String acceptorUsername = sender; // User B who accepted
+        final String acceptedRecipient = acceptedMsg.recipient; // Should be User A (this.currentUsername)
+        final String acceptedRoom = acceptedMsg.proposedRoomName; // The room name context
+
+        if (this.currentUsername != null && this.currentUsername.equals(acceptedRecipient)) {
+            System.out.println("[Controller] Received PRIVATE_CHAT_ACCEPTED from '" + acceptorUsername + "' for room: " + acceptedRoom);
+            String originalPassword = pendingSentPrivateChatProposals.remove(acceptedRoom);
+
+            if (originalPassword != null) {
+                if (chatRoomUI != null) {
+                    SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage(acceptorUsername + " accepted private chat for '" + acceptedRoom + "'. Joining..."));
+                }
+                joinOrSwitchToRoom(acceptedRoom, originalPassword); // User A joins
+            } else {
+                System.err.println("[Controller] Error: Received ACCEPT for room '" + acceptedRoom + "' but no pending proposal found.");
+                if (chatRoomUI != null) {
+                    SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage("Error joining accepted private chat: Proposal details lost."));
+                }
+            }
+        }
+    }
+
+    private void handlePrivateChatDeclined(MessageData declinedMsg, String sender, String roomForMessage) {
+        // This client is User A (initiator)
+        final String declinerUsername = sender; // User B who declined
+        final String declinedRecipient = declinedMsg.recipient; // Should be User A
+        final String declinedRoomCtx = declinedMsg.proposedRoomName;
+
+        if (this.currentUsername != null && this.currentUsername.equals(declinedRecipient)) {
+            System.out.println("[Controller] Received PRIVATE_CHAT_DECLINED from '" + declinerUsername + "' for proposal: " + declinedRoomCtx);
+            pendingSentPrivateChatProposals.remove(declinedRoomCtx);
+            if (chatRoomUI != null) {
+                SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage(declinerUsername + " declined your private chat request for '" + declinedRoomCtx + "'."));
+            }
+        }
+    }
+
+
+    @Override
+    public void onError(final String message, final Exception e) {
+        System.err.println("[Controller] Network Listener: Error: " + message + (e != null ? " (" + e.getClass().getSimpleName() + ")" : ""));
+        if (e != null) e.printStackTrace(); // Always log for debugging
+
+        if (message != null && message.contains("Existing subscription to channel")) {
+            System.out.println("[Controller] Suppressing 'Existing subscription' error from chat display as it's usually benign.");
+            return;
+        }
+        SwingUtilities.invokeLater(() -> {
+            if (chatRoomUI != null && this.activeRoomName != null) { // Only show in chat if in a room
+                chatRoomUI.displaySystemMessage("[Network Error] " + message);
+            } else {
+                showErrorDialog("Network Error: " + message); // General popup if not in a room context
+            }
+        });
+    }
+
+    private void showErrorDialog(String message) {
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(mainFrame, message, "Error", JOptionPane.ERROR_MESSAGE));
+    }
+
+    public List<ChatMessage> getChatHistory(String roomName) {
+        synchronized(roomChatHistories) {
+            return new ArrayList<>(roomChatHistories.getOrDefault(roomName, List.of()));
+        }
+    }
+
+    private void sendSystemMessage(MessageType type) {
+        if (networkService == null || !networkService.isConnectedExplicit()) {
+            System.err.println("[Controller] Skipping system message " + type + ": Network not connected.");
+            return;
+        }
+        if (currentUsername == null) {
+            System.err.println("[Controller] Skipping system message " + type + ": currentUsername is null.");
+            return;
+        }
+        // System.out.println("[Controller] Sending system message: " + type + " for user: " + currentUsername);
+        MessageData sysMessage = new MessageData(type, this.currentUsername, this.activeRoomName); // Add room context
+        networkService.sendChatMessage(sysMessage);
+        if (type == MessageType.LEAVE) { // Small delay for LEAVE to go out
+            try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+    }
+
+    public void notifyChatDownloaded(String roomName, String downloaderUsername) {
+        if (networkService != null && networkService.isConnectedExplicit() &&
+                Objects.equals(this.activeRoomName, roomName) &&
+                Objects.equals(this.currentUsername, downloaderUsername)) {
+            System.out.println("[Controller] Sending DOWNLOAD notification for user: " + this.currentUsername);
+            sendSystemMessage(MessageType.DOWNLOAD);
+        } else {
+            System.err.println("[Controller] Conditions not met to send DOWNLOAD notification.");
+        }
+    }
+    // --- Private Chat Methods ---
     public void requestPrivateChat(String targetUsername) {
-        if (currentUsername == null || activeRoomName == null) {
+        if (currentUsername == null || activeRoomName == null || !networkService.isConnectedExplicit()) {
             showErrorDialog("Cannot initiate private chat: Not fully connected.");
             return;
         }
@@ -417,201 +634,130 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
             return;
         }
 
-        System.out.println("[Controller] User '" + currentUsername + "' requests private chat with '" + targetUsername + "' from room '" + activeRoomName + "'");
-
-        // 1. Generate a unique proposed room name and a simple password
-        String proposedRoomSuffix = UUID.randomUUID().toString().substring(0, 8);
-        String proposedPrivateRoomName = "private-" + currentUsername.replaceAll("[^a-zA-Z0-9]", "") +
+        String proposedRoomSuffix = UUID.randomUUID().toString().substring(0, 6);
+        String proposedPrivateRoomName = ("private-" + currentUsername.replaceAll("[^a-zA-Z0-9]", "") +
                 "-" + targetUsername.replaceAll("[^a-zA-Z0-9]", "") +
-                "-" + proposedRoomSuffix;
-        proposedPrivateRoomName = proposedPrivateRoomName.toLowerCase();
+                "-" + proposedRoomSuffix).toLowerCase();
+        proposedPrivateRoomName = proposedPrivateRoomName.substring(0, Math.min(proposedPrivateRoomName.length(), 60)); // Max length for channel
 
         Random random = new Random();
-        String proposedPassword = String.format("%04d-%04d", random.nextInt(10000), random.nextInt(10000));
+        String proposedPassword = String.format("%04d%04d", random.nextInt(10000), random.nextInt(10000)); // 8-digit simple pass
 
         pendingSentPrivateChatProposals.put(proposedPrivateRoomName, proposedPassword);
-        System.out.println("[Controller] Generated private room: " + proposedPrivateRoomName + " with temp pass (stored locally).");
 
-        // 2. Create and send the PRIVATE_CHAT_REQUEST message
-        // *** CORRECTED CONSTRUCTOR CALL ***
-        MessageData requestMsg = new MessageData(
-                this.currentUsername,       // sender = User A
-                targetUsername,             // recipient = User B
-                proposedPrivateRoomName,
-                proposedPassword
-        );
-        // The type (PRIVATE_CHAT_REQUEST) is set *inside* that MessageData constructor.
+        MessageData requestMsg = new MessageData(this.currentUsername, targetUsername, proposedPrivateRoomName, proposedPassword, this.activeRoomName); // PRIVATE_CHAT_REQUEST
 
-        System.out.println("[Controller] Sending PRIVATE_CHAT_REQUEST to " + targetUsername + " for room " + proposedPrivateRoomName);
+        System.out.println("[Controller] Sending PRIVATE_CHAT_REQUEST to " + targetUsername + " for room " + proposedPrivateRoomName + " (from current room: " + this.activeRoomName +")");
         boolean sent = networkService.sendChatMessage(requestMsg);
 
-        if (sent) {
-            if (chatRoomUI != null) {
-                final String msg = "Private chat request sent to " + targetUsername + " for room " + proposedPrivateRoomName;
-                SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage(msg));
-            }
-        } else {
+        if (sent && chatRoomUI != null) {
+            final String msg = "Private chat request sent to " + targetUsername + ".";
+            SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage(msg));
+        } else if (!sent) {
             showErrorDialog("Failed to send private chat request to " + targetUsername + ".");
             pendingSentPrivateChatProposals.remove(proposedPrivateRoomName);
         }
     }
 
-    /**
-     * Called by ChatRoom UI (User B - Recipient) when they accept a private chat invitation.
-     * @param initiatorUsername User A who sent the request.
-     * @param acceptedRoomName The name of the private room they are accepting.
-     * @param passwordForAcceptedRoom The password User B received in the request.
-     */
     public void acceptPrivateChat(String initiatorUsername, String acceptedRoomName, String passwordForAcceptedRoom) {
-        if (currentUsername == null) return; // Should not happen if UI allows accept
+        if (currentUsername == null || !networkService.isConnectedExplicit()) return;
 
         System.out.println("[Controller] User '" + currentUsername + "' ACCEPTS private chat with '" + initiatorUsername + "' for room: " + acceptedRoomName);
+        // Send ACCEPTED message back to initiator (User A), using current active room context for sending
+        MessageData acceptMsg = new MessageData(MessageType.PRIVATE_CHAT_ACCEPTED, this.currentUsername, initiatorUsername, acceptedRoomName, this.activeRoomName);
+        networkService.sendChatMessage(acceptMsg);
 
-        // 1. Send PRIVATE_CHAT_ACCEPTED message back to User A
-        MessageData acceptMsg = new MessageData(
-                MessageType.PRIVATE_CHAT_ACCEPTED,
-                this.currentUsername, // sender = User B
-                initiatorUsername,    // recipient = User A
-                acceptedRoomName      // roomNameContext = the accepted room
-        );
-        System.out.println("[Controller] Sending PRIVATE_CHAT_ACCEPTED to " + initiatorUsername);
-        networkService.sendChatMessage(acceptMsg); // Send on current room's channel (where A is)
-
-        // 2. User B (this client) joins the new private room
-        System.out.println("[Controller] User '" + currentUsername + "' now joining accepted private room: " + acceptedRoomName);
+        // User B (this client) now joins the new private room
         joinOrSwitchToRoom(acceptedRoomName, passwordForAcceptedRoom);
     }
 
-    /**
-     * Called by ChatRoom UI (User B - Recipient) when they decline a private chat invitation.
-     * @param initiatorUsername User A who sent the request.
-     * @param declinedRoomName The name of the private room they are declining.
-     */
     public void declinePrivateChat(String initiatorUsername, String declinedRoomName) {
-        if (currentUsername == null) return;
-
+        if (currentUsername == null || !networkService.isConnectedExplicit()) return;
         System.out.println("[Controller] User '" + currentUsername + "' DECLINES private chat with '" + initiatorUsername + "' for room: " + declinedRoomName);
-
-        MessageData declineMsg = new MessageData(
-                MessageType.PRIVATE_CHAT_DECLINED,
-                this.currentUsername, // sender = User B
-                initiatorUsername,    // recipient = User A
-                declinedRoomName      // roomNameContext = the declined room
-        );
-        System.out.println("[Controller] Sending PRIVATE_CHAT_DECLINED to " + initiatorUsername);
+        MessageData declineMsg = new MessageData(MessageType.PRIVATE_CHAT_DECLINED, this.currentUsername, initiatorUsername, declinedRoomName, this.activeRoomName);
         networkService.sendChatMessage(declineMsg);
     }
 
-// --- File Sharing Logic ---
-
-    /**
-     * Called by ChatRoom UI to initiate a file share.
-     * This method will handle encryption, uploading, and sending the offer.
-     * It should be run on a background thread by the ChatRoom UI.
-     *
-     * @param roomName The current active room.
-     * @param senderUsername The user initiating the share.
-     * @param fileToShare The original, unencrypted file selected by the user.
-     */
-    public void initiateFileShare(String roomName, String senderUsername, File fileToShare) {
-        System.out.println("[Controller] Initiating file share for '" + fileToShare.getName() + "' in room '" + roomName + "' by user '" + senderUsername + "'");
-
-        if (!this.activeRoomName.equals(roomName) || !this.currentUsername.equals(senderUsername)) {
-            System.err.println("[Controller] File share request mismatch: Active/Current user/room does not match request parameters.");
-            if (chatRoomUI != null) chatRoomUI.fileShareAttemptFinished(); // Decrement counter
-            return;
+    // --- File Sharing ---
+    public boolean initiateFileShare(File fileToShare, String forRoomName) {
+        if (!Objects.equals(this.activeRoomName, forRoomName)) {
+            System.err.println("[Controller] File share room mismatch. Active: " + this.activeRoomName + ", Request for: " + forRoomName);
+            if (chatRoomUI != null) chatRoomUI.fileShareAttemptFinished();
+            return false;
+        }
+        if (this.currentUsername == null || !networkService.isConnectedExplicit()) {
+            System.err.println("[Controller] Cannot share file: Not connected or no user.");
+            if (chatRoomUI != null) chatRoomUI.fileShareAttemptFinished();
+            return false;
         }
 
-        File encryptedTempFile = null;
-        try {
-            // 1. Generate a one-time AES key for this file
-            SecureRandom random = SecureRandom.getInstanceStrong();
-            byte[] oneTimeKeyBytes = new byte[32]; // 256-bit AES key
-            random.nextBytes(oneTimeKeyBytes);
-            // System.out.println("[Controller] Generated one-time file key (bytes length): " + oneTimeKeyBytes.length);
+        System.out.println("[Controller] Initiating file share for '" + fileToShare.getName() + "' in room '" + forRoomName + "'");
+        // Run lengthy operations in a background thread to avoid freezing UI
+        new Thread(() -> {
+            File encryptedTempFile = null;
+            boolean success = false;
+            try {
+                SecureRandom random = SecureRandom.getInstanceStrong();
+                byte[] oneTimeKeyBytes = new byte[32]; // 256-bit AES key
+                random.nextBytes(oneTimeKeyBytes);
 
-            // 2. Encrypt the file content with this one-time key
-            // For simplicity, we'll use a slightly different method in EncryptionService
-            // or do it directly here for file streams. Let's assume EncryptionService can handle File objects.
-            // Create a temporary file for the encrypted content.
-            encryptedTempFile = File.createTempFile("enc_share_", "_" + fileToShare.getName());
-            // System.out.println("[Controller] Created temp encrypted file: " + encryptedTempFile.getAbsolutePath());
+                encryptedTempFile = File.createTempFile("enc_share_", "_" + fileToShare.getName().replaceAll("[^a-zA-Z0-9._-]", "_"));
+                encryptionService.encryptFileWithGivenKey(fileToShare, encryptedTempFile, oneTimeKeyBytes);
 
-            // This part needs careful implementation in EncryptionService or here:
-            // Option A: Modify EncryptionService to take File in, File out, and a SecretKey
-            // encryptionService.encryptFile(fileToShare, encryptedTempFile, new SecretKeySpec(oneTimeKeyBytes, "AES"));
-
-            // Option B: Simpler stream encryption (less robust error handling here for brevity)
-            // This uses the ONE-TIME KEY, NOT the room key for file content.
-            System.out.println("[Controller] Encrypting file content with one-time key...");
-            encryptionService.encryptFileWithGivenKey(fileToShare, encryptedTempFile, oneTimeKeyBytes);
-            System.out.println("[Controller] File content encrypted to temp file.");
-
-
-            // 3. Encrypt the one-time file key with the current room's E2EE key
-            //    The room key MUST be derived and available in encryptionService.
-            if (encryptionService.isRoomKeySet()) { // Add a check in EncryptionService
+                if (!encryptionService.isRoomKeySet()) { // Should be set if connected to a room
+                    throw new IllegalStateException("Room key is not set. Cannot encrypt file key for sharing.");
+                }
                 String encryptedOneTimeFileKeyBase64 = encryptionService.encryptDataWithRoomKey(oneTimeKeyBytes);
-                System.out.println("[Controller] One-time file key encrypted with room key.");
 
-                // 4. Upload the encryptedTempFile to transfer.sh
-                System.out.println("[Controller] Uploading encrypted file to transfer.sh...");
-                String downloadUrl = fileUploader.uploadFile(encryptedTempFile, fileToShare.getName() + ".enc"); // Add .enc
-                System.out.println("[Controller] Encrypted file uploaded. Download URL: " + downloadUrl);
+                String uploadName = fileToShare.getName().replaceAll("[^a-zA-Z0-9._-]", "_") + ".enc";
+                String downloadUrl = fileUploader.uploadFile(encryptedTempFile, uploadName); // uploadFile should handle its own errors and return null on failure
 
-                // 5. (Optional) Calculate hash of the ORIGINAL unencrypted file
-                // String originalFileHash = calculateSHA256(fileToShare); // Implement calculateSHA256
+                if (downloadUrl == null) {
+                    throw new IOException("File upload failed (transfer.sh might be down or file too large).");
+                }
 
-                // 6. Create and send the FILE_SHARE_OFFER message
+                String originalFileHash = calculateSHA256(fileToShare);
+
                 MessageData fileOfferMessage = new MessageData(
-                        senderUsername,
+                        this.currentUsername,
                         fileToShare.getName(),
                         fileToShare.length(),
                         downloadUrl,
                         encryptedOneTimeFileKeyBase64,
-                        null // Pass originalFileHash here if calculated
+                        originalFileHash,
+                        forRoomName // Room context for the message
                 );
                 networkService.sendChatMessage(fileOfferMessage);
                 System.out.println("[Controller] File share offer sent for '" + fileToShare.getName() + "'");
+                success = true;
 
-                // Notify UI locally (optional, as sender will also receive their own offer)
-                // if (chatRoomUI != null) {
-                //    chatRoomUI.displaySystemMessage("You started sharing '" + fileToShare.getName() + "'.");
-                // }
-
-            } else {
-                throw new IllegalStateException("Room key is not set. Cannot encrypt file key.");
-            }
-
-        } catch (Exception e) {
-            System.err.println("[Controller] Error during file share process for '" + fileToShare.getName() + "': " + e.getMessage());
-            e.printStackTrace();
-            // Notify UI of failure
-            if (chatRoomUI != null) {
+            } catch (Exception e) {
+                System.err.println("[Controller] Error during file share process for '" + fileToShare.getName() + "': " + e.getMessage());
+                e.printStackTrace();
                 final String fName = fileToShare.getName();
-                SwingUtilities.invokeLater(() -> chatRoomUI.displaySystemMessage("Failed to share file: " + fName));
-            }
-        } finally {
-            // 7. Clean up the temporary encrypted file
-            if (encryptedTempFile != null && encryptedTempFile.exists()) {
-                if (encryptedTempFile.delete()) {
-                    System.out.println("[Controller] Deleted temporary encrypted file: " + encryptedTempFile.getName());
-                } else {
-                    System.err.println("[Controller] Failed to delete temporary encrypted file: " + encryptedTempFile.getName());
+                final String errText = e.getMessage();
+                SwingUtilities.invokeLater(() -> {
+                    if (chatRoomUI != null) chatRoomUI.displaySystemMessage("Failed to share file '" + fName + "': " + errText);
+                });
+            } finally {
+                if (encryptedTempFile != null && encryptedTempFile.exists()) {
+                    if (!encryptedTempFile.delete()) {
+                        System.err.println("[Controller] Failed to delete temporary encrypted file: " + encryptedTempFile.getAbsolutePath());
+                    }
+                }
+                if (chatRoomUI != null) {
+                    chatRoomUI.fileShareAttemptFinished(); // Notify UI attempt is done
                 }
             }
-            // 8. Notify ChatRoom UI that the attempt is finished to decrement counter
-            if (chatRoomUI != null) {
-                chatRoomUI.fileShareAttemptFinished();
-            }
-        }
+        }).start();
+        return true; // Indicates the process has started (async)
     }
 
-    // Helper to calculate SHA-256 hash (optional)
+
     private String calculateSHA256(File file) throws IOException, NoSuchAlgorithmException {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (FileInputStream fis = new FileInputStream(file)) {
-            byte[] byteArray = new byte[8192]; // Read in 8KB chunks
+            byte[] byteArray = new byte[8192];
             int bytesCount;
             while ((bytesCount = fis.read(byteArray)) != -1) {
                 digest.update(byteArray, 0, bytesCount);
@@ -619,386 +765,93 @@ public class ChatController implements NetworkListener { // Ensure NetworkListen
         }
         byte[] bytes = digest.digest();
         StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
+        for (byte b : bytes) sb.append(String.format("%02x", b));
         return sb.toString();
     }
 
-    // --- End File Sharing Logic ---
-    @Override
-    public void onMessageReceived(MessageData messageData) {
-        if (messageData == null) { // Check if parsing failed in PusherService
-            System.err.println("[Controller] onMessageReceived called with null messageData object. Parsing likely failed in PusherService.");
-            // No further processing possible
-            return;
-        }
-        if (messageData.sender == null || messageData.type == null) {
-            System.err.println("[Controller] Received MessageData with null sender or type. Sender: " + messageData.sender + ", Type: " + messageData.type);
-            return;
-        }
-
-        final String sender = messageData.sender;
-        final String roomForMessage = this.activeRoomName;
-        if (roomForMessage == null) {
-            System.err.println("[Controller] Message received but no active room set. Ignoring.");
-            return;
-        }
-
-        // Ignore self-sent system messages to avoid feedback loops for announcements.
-        // Keep ignoring self for CHAT is a UI preference (do you want to see your own messages echoed?).
-        // For this fix, we specifically need to process HEARTBEATS from self (to update timestamp),
-        // but not act on self-JOIN/LEAVE as announcements.
-        if (messageData.sender.equals(this.currentUsername) &&
-                (messageData.type == MessageType.JOIN ||
-                        messageData.type == MessageType.LEAVE ||
-                        messageData.type == MessageType.DOWNLOAD)) { // Keep ignoring self-DOWNLOAD display
-            System.out.println("[Controller] Ignoring self-sent system message: " + messageData.type + " from " + messageData.sender);
-            return;
-        }
-        // Self-HEARTBEATS will pass through to update the local timestamp.
-        // Self-CHAT will also pass through to be added to history and displayed (if not filtered by a different mechanism).
-
-
-        // Optionally ignore self-sent system messages if needed, but chat messages are fine.
-        // if (sender.equals(this.currentUsername) && messageData.type != MessageType.CHAT) {
-        //     System.out.println("[Controller] Ignoring self-sent system message: " + messageData.type);
-        //     return;
-        // }
-
-        System.out.println("[Controller] Network Listener: Processing " + messageData.type + " from " + sender + " for active room " + roomForMessage);
-        switch (messageData.type) {
-            case CHAT:
-                if (messageData.encryptedData == null) {
-                    System.err.println("[Controller] Received CHAT message with null encryptedData from " + sender);
-                    return;
-                }
-                try {
-                    final String decryptedText = encryptionService.decrypt(messageData.encryptedData);
-                    final ChatMessage chatMessage = new ChatMessage(sender, decryptedText);
-                    synchronized(roomChatHistories) {
-                        roomChatHistories.computeIfAbsent(roomForMessage, k -> new ArrayList<>()).add(chatMessage);
-                    }
-                    SwingUtilities.invokeLater(() -> {
-                        if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                            chatRoomUI.appendMessage(chatMessage.getSender(), chatMessage.getMessage());
-                            // <<< If receiving chat from someone not in list, add them (infer presence) >>>
-                            if (!sender.equals(this.currentUsername)) { // Don't add self this way
-                                chatRoomUI.addUserToList(sender);
-                            }
-                            // <<< End infer presence >>>
-                        }
-                    });
-                } catch (Exception e) {
-                    System.err.println("[Controller] Failed decrypt message from " + sender + ": " + e.getMessage());
-                    SwingUtilities.invokeLater(() -> {
-                        if (chatRoomUI != null) chatRoomUI.displaySystemMessage("[Error] Could not decrypt message from " + sender + ".");
-                    });
-                }
-                break; // <<< Ensure break statements! >>>
-
-            case JOIN:
-                final String joiningUser = sender;
-                userLastHeartbeat.put(joiningUser, System.currentTimeMillis()); // Track new user
-                SwingUtilities.invokeLater(() -> {
-                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        if (!joiningUser.equals(this.currentUsername)) { // Message from ANOTHER user joining
-                            chatRoomUI.displaySystemMessage(joiningUser + " has joined the room.");
-                            chatRoomUI.addUserToList(joiningUser);
-                            // This client (currentUsername) is already in the room.
-                            // Send a HEARTBEAT to let the new user (joiningUser) know about us.
-                            System.out.println("[Controller] User '" + joiningUser + "' joined. Sending our own HEARTBEAT as '" + this.currentUsername + "' to announce presence.");
-                            sendSystemMessage(MessageType.HEARTBEAT);
-                        } else {
-                            // This is our OWN JOIN message coming back.
-                            // We don't need to display "[currentUsername] has joined".
-                            // Our presence in the list is handled by updateUIForRoomSwitch in onConnected.
-                            System.out.println("[Controller] Received own JOIN message for " + joiningUser + ". No action needed here as UI already updated.");
-                            // chatRoomUI.addUserToList(joiningUser); // Already done in updateUIForRoomSwitch
-                        }
-                    }
-                });
-                break;
-
-            case LEAVE:
-                final String leavingUser = sender;
-                userLastHeartbeat.remove(leavingUser);
-                SwingUtilities.invokeLater(() -> {
-                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        chatRoomUI.displaySystemMessage(leavingUser + " has left the room.");
-                        chatRoomUI.removeUserFromList(leavingUser);
-                    }
-                });
-                break;
-            case HEARTBEAT:
-                final String heartbeatSender = sender;
-                userLastHeartbeat.put(heartbeatSender, System.currentTimeMillis());
-                // If this heartbeat is from another user, ensure they are in our list.
-                // This handles cases where we join and they were already there but haven't sent a JOIN to us.
-                if (!heartbeatSender.equals(this.currentUsername)) {
-                    SwingUtilities.invokeLater(() -> {
-                        if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                            // System.out.println("[Controller] Processing HEARTBEAT from " + heartbeatSender + ", ensuring they are in list.");
-                            chatRoomUI.addUserToList(heartbeatSender);
-                        }
-                    });
-                } else {
-                    // It's our own heartbeat echoed back. Fine, timestamp is updated.
-                    // System.out.println("[Controller] Processed own HEARTBEAT for " + heartbeatSender);
-                }
-                break;
-            case FILE_SHARE_OFFER: // <<< NEW: Handle incoming file share offer >>>
-                System.out.println("[Controller] Received FILE_SHARE_OFFER from " + sender + " for file: " + messageData.originalFilename);
-                final MessageData offer = messageData; // Capture for lambda
-                SwingUtilities.invokeLater(() -> {
-                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        // Let ChatRoom UI decide how to display this.
-                        // It will need a way to render this custom message.
-                        // For now, just a system message to confirm receipt.
-                        chatRoomUI.displaySystemMessage(sender + " is offering to share file: '" +
-                                offer.originalFilename + "' (" + formatFileSize(offer.originalFileSize) + ").");
-                        // The actual download logic will be triggered by UI interaction in MessageCellRenderer
-                        // For now, the controller just relays the offer info.
-                        // We can also directly add it to the chatListModel if MessageCellRenderer is ready
-                        // chatRoomUI.appendFileOfferMessage(offer); // (New method needed in ChatRoom)
-                    }
-                });
-                break;
-            case DOWNLOAD:
-                SwingUtilities.invokeLater(() -> {
-                    if (chatRoomUI != null && roomForMessage.equals(this.activeRoomName)) {
-                        if (!sender.equals(this.currentUsername)) {
-                            chatRoomUI.displaySystemMessage(sender + " has downloaded the chat history.");
-                        }
-                    }
-                });
-                break;
-            case PRIVATE_CHAT_REQUEST:
-                // This client is potentially User B (the recipient)
-                final String requestSender = sender; // User A
-                final String requestRecipient = messageData.recipient;
-                final String proposedRoom = messageData.proposedRoomName;
-                final String proposedPass = messageData.proposedRoomPassword; // Plaintext password from proposal
-
-                if (this.currentUsername != null && this.currentUsername.equals(requestRecipient)) {
-                    System.out.println("[Controller] Received PRIVATE_CHAT_REQUEST from '" + requestSender + "' for me (" + currentUsername + ")");
-                    SwingUtilities.invokeLater(() -> {
-                        if (chatRoomUI != null) {
-                            // UI needs to show a prompt to accept/decline
-                            chatRoomUI.displayPrivateChatRequest(requestSender, proposedRoom, proposedPass);
-                        }
-                    });
-                } else {
-                    // Not for me, or I'm not logged in. Ignore.
-                    // System.out.println("[Controller] Received PRIVATE_CHAT_REQUEST not intended for me, or I'm not logged in.");
-                }
-                break;
-
-            case PRIVATE_CHAT_ACCEPTED:
-                // This client is potentially User A (the initiator)
-                final String acceptorUsername = sender; // User B
-                final String acceptedRecipient = messageData.recipient;
-                final String acceptedRoom = messageData.proposedRoomName; // This is the key to get the password
-
-                if (this.currentUsername != null && this.currentUsername.equals(acceptedRecipient)) {
-                    System.out.println("[Controller] Received PRIVATE_CHAT_ACCEPTED from '" + acceptorUsername + "' for room: " + acceptedRoom);
-                    String originalPassword = pendingSentPrivateChatProposals.remove(acceptedRoom); // Retrieve and remove
-
-                    if (originalPassword != null) {
-                        SwingUtilities.invokeLater(() -> {
-                            if (chatRoomUI != null) {
-                                chatRoomUI.displaySystemMessage(acceptorUsername + " accepted your private chat for room: " + acceptedRoom + ". Joining now...");
-                            }
-                        });
-                        // User A now joins the private room it proposed
-                        joinOrSwitchToRoom(acceptedRoom, originalPassword);
-                    } else {
-                        System.err.println("[Controller] Error: Received ACCEPT for room '" + acceptedRoom + "' but no pending proposal/password found.");
-                        SwingUtilities.invokeLater(() -> {
-                            if (chatRoomUI != null) chatRoomUI.displaySystemMessage("Error joining accepted private chat: Proposal details lost.");
-                        });
-                    }
-                }
-                break;
-
-            case PRIVATE_CHAT_DECLINED:
-                // This client is potentially User A (the initiator)
-                final String declinerUsername = sender; // User B
-                final String declinedRecipient = messageData.recipient;
-                final String declinedRoomCtx = messageData.proposedRoomName;
-
-                if (this.currentUsername != null && this.currentUsername.equals(declinedRecipient)) {
-                    System.out.println("[Controller] Received PRIVATE_CHAT_DECLINED from '" + declinerUsername + "' for room proposal: " + declinedRoomCtx);
-                    pendingSentPrivateChatProposals.remove(declinedRoomCtx); // Clean up proposal
-                    SwingUtilities.invokeLater(() -> {
-                        if (chatRoomUI != null) {
-                            chatRoomUI.displaySystemMessage(declinerUsername + " declined your private chat request for room: " + declinedRoomCtx);
-                        }
-                    });
-                }
-                break;
-            default:
-                System.err.println("[Controller] Received message with unknown type: " + messageData.type);
-        }
-    }
-
     private String formatFileSize(long size) {
-        if (size < 1024) return size + " B";
-        int exp = (int) (Math.log(size) / Math.log(1024));
-        String pre = "KMGTPE".charAt(exp-1) + "";
-        return String.format("%.1f %sB", size / Math.pow(1024, exp), pre);
+        if (size <= 0) return "0 B";
+        final String[] units = new String[] { "B", "KB", "MB", "GB", "TB" };
+        int digitGroups = (int) (Math.log10(size) / Math.log10(1024));
+        return String.format("%.1f %s", size / Math.pow(1024, digitGroups), units[digitGroups]);
     }
 
-    @Override
-    public void onError(final String message, final Exception e) {
-        System.err.println("[Controller] Network Listener: Error: " + message + (e != null ? " - " + e.getMessage() : ""));
-        if (message != null && message.contains("Existing subscription to channel")) {
-            System.out.println("[Controller] Suppressing 'Existing subscription' error from chat display.");
-            // Log the stack trace for debugging if needed, but don't show in chat
-            if (e != null) { e.printStackTrace(); }
-            return; // Exit without calling displaySystemMessage
-        }
-        SwingUtilities.invokeLater(() -> {
-            if (chatRoomUI != null) {
-                // Display other network errors
-                chatRoomUI.displaySystemMessage("[Network Error] " + message);
-            } else {
-                // Show popup only if UI isn't available (less intrusive)
-                showErrorDialog("Network Error: " + message);
-            }
-        });
-         if (e != null) {
-             e.printStackTrace(); // Log stack trace for debugging
-         }
-    }
-
-    // --- UI Utility Methods ---
-    private void showErrorDialog(String message) {
-         SwingUtilities.invokeLater(() -> {
-             JOptionPane.showMessageDialog(mainFrame, message, "Error", JOptionPane.ERROR_MESSAGE);
-         });
-    }
-
-    // --- Getter for chat history ---
-    /**
-     * Retrieves the stored chat history for a specific room.
-     * Returns a defensive copy or ensure thread safety if accessed across threads.
-     * @param roomName The name of the room.
-     * @return A List of ChatMessage objects, or an empty list if no history exists.
-     */
-    public List<ChatMessage> getChatHistory(String roomName) {
-         synchronized(roomChatHistories) { // Synchronize access
-             // Return a defensive copy to prevent modification of the internal list by the UI
-             return new ArrayList<>(roomChatHistories.getOrDefault(roomName, List.of())); // Use List.of() for empty immutable list if Java 9+
-             // Or for older Java: return new ArrayList<>(roomChatHistories.getOrDefault(roomName, Collections.emptyList()));
-         }
-    }
-    private void sendSystemMessage(MessageType type) {
-        // Check connection state FIRST
-        if (networkService == null || !networkService.isConnectedExplicit()) { // Use explicit check
-            System.err.println("[Controller] Skipping system message " + type + ": Network not connected.");
-            return;
-        }
-        // Check username
-        if (currentUsername == null) {
-            System.err.println("[Controller] Skipping system message " + type + ": currentUsername is null.");
-            return;
-        }
-
-        System.out.println("[Controller] Sending system message: " + type + " for user: " + currentUsername);
-        MessageData sysMessage = new MessageData(type, this.currentUsername);
-        networkService.sendChatMessage(sysMessage);
-        // Delay for LEAVE is still useful
-        if (type == MessageType.LEAVE) {
-            try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-    }
-
-    public void notifyChatDownloaded(String roomName, String downloaderUsername) {
-        System.out.println("[Controller] User '" + downloaderUsername + "' initiated download for room: " + roomName);
-
-        // Ensure we are connected, the action is for the active room, and it's the current user performing it.
-        if (networkService != null && networkService.isConnectedExplicit() &&
-                this.activeRoomName != null && this.activeRoomName.equals(roomName) &&
-                this.currentUsername != null && this.currentUsername.equals(downloaderUsername)) {
-
-            System.out.println("[Controller] Sending DOWNLOAD notification for user: " + this.currentUsername);
-            sendSystemMessage(MessageType.DOWNLOAD); // sendSystemMessage uses this.currentUsername
-        } else {
-            System.err.println("[Controller] Conditions not met to send DOWNLOAD notification. " +
-                    "Connected: " + (networkService != null && networkService.isConnectedExplicit()) +
-                    ", Active Room Match: " + (this.activeRoomName != null && this.activeRoomName.equals(roomName)) +
-                    ", User Match: " + (this.currentUsername != null && this.currentUsername.equals(downloaderUsername)));
-        }
-    }
+    // --- Heartbeat Management ---
     private void startHeartbeatTimers() {
-        stopHeartbeatTimers(); // Stop any existing timers first
+        stopHeartbeatTimers(); // Ensure no old timers are running
 
-        // Timer to send heartbeats
-        heartbeatSendTimer = new Timer("HeartbeatSendTimer-" + currentUsername, true); // Daemon thread
+        heartbeatSendTimer = new Timer("HeartbeatSendTimer-" + currentUsername, true);
         heartbeatSendTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                if (networkService.isConnectedExplicit() && currentUsername != null) {
-                    // System.out.println("[Controller Heartbeat] Sending HEARTBEAT for " + currentUsername);
+                if (networkService.isConnectedExplicit() && currentUsername != null && activeRoomName != null) {
                     sendSystemMessage(MessageType.HEARTBEAT);
                 }
             }
         }, HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS);
-        System.out.println("[Controller] Heartbeat SEND timer started for " + currentUsername);
 
-        // Timer to check for timed-out users
-        userTimeoutCheckTimer = new Timer("UserTimeoutCheckTimer-" + currentUsername, true); // Daemon thread
+        userTimeoutCheckTimer = new Timer("UserTimeoutCheckTimer-" + currentUsername, true);
         userTimeoutCheckTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 checkUserTimeouts();
             }
-        }, USER_TIMEOUT_THRESHOLD_MS, USER_TIMEOUT_THRESHOLD_MS / 2); // Check more frequently than threshold
-        System.out.println("[Controller] User TIMEOUT CHECK timer started for " + currentUsername);
+        }, USER_TIMEOUT_THRESHOLD_MS, USER_TIMEOUT_THRESHOLD_MS / 2);
+        System.out.println("[Controller] Heartbeat timers started for " + currentUsername + " in room " + activeRoomName);
     }
 
     private void stopHeartbeatTimers() {
         if (heartbeatSendTimer != null) {
             heartbeatSendTimer.cancel();
             heartbeatSendTimer = null;
-            System.out.println("[Controller] Heartbeat SEND timer stopped.");
         }
         if (userTimeoutCheckTimer != null) {
             userTimeoutCheckTimer.cancel();
             userTimeoutCheckTimer = null;
-            System.out.println("[Controller] User TIMEOUT CHECK timer stopped.");
         }
-        userLastHeartbeat.clear(); // Clear last known heartbeats when timers stop (e.g., room switch)
+        userLastHeartbeat.clear(); // Clear tracked users when stopping (e.g. on disconnect or room switch)
+        System.out.println("[Controller] Heartbeat timers stopped.");
     }
 
+    // In ChatController.java
     private void checkUserTimeouts() {
-        if (chatRoomUI == null) return; // No UI to update
+        // Check if ChatRoom UI is available AND if we (controller) have an active room.
+        if (chatRoomUI == null || this.activeRoomName == null) {
+            // System.out.println("[Controller Timeout] Skipping check: No UI or no active room in controller.");
+            return;
+        }
 
         long currentTime = System.currentTimeMillis();
         List<String> timedOutUsers = new ArrayList<>();
+        final String currentControllerActiveRoom = this.activeRoomName; // Capture for lambda context
 
-        // Iterate over a copy of keys to avoid ConcurrentModificationException if removing
-        new ArrayList<>(userLastHeartbeat.keySet()).forEach(user -> {
-            // Don't time out self
-            if (user.equals(currentUsername)) {
-                userLastHeartbeat.put(user, currentTime); // Keep self updated
-                return;
+        synchronized (userLastHeartbeat) {
+            List<String> usersToCheck = new ArrayList<>(userLastHeartbeat.keySet());
+            for (String user : usersToCheck) {
+                if (user.equals(currentUsername)) {
+                    userLastHeartbeat.put(user, currentTime);
+                    continue;
+                }
+                Long lastSeen = userLastHeartbeat.get(user);
+                if (lastSeen == null || (currentTime - lastSeen > USER_TIMEOUT_THRESHOLD_MS)) {
+                    timedOutUsers.add(user);
+                }
             }
-            Long lastSeen = userLastHeartbeat.get(user);
-            if (lastSeen == null || (currentTime - lastSeen > USER_TIMEOUT_THRESHOLD_MS)) {
-                timedOutUsers.add(user);
+            for (String user : timedOutUsers) {
+                userLastHeartbeat.remove(user);
             }
-        });
+        }
 
-        for (String user : timedOutUsers) {
-            System.out.println("[Controller Timeout] User " + user + " timed out.");
-            userLastHeartbeat.remove(user); // Remove from tracking
-            final String finalUser = user; // For lambda
+        if (!timedOutUsers.isEmpty()) {
             SwingUtilities.invokeLater(() -> {
-                if (chatRoomUI != null) { // Re-check UI
-                    chatRoomUI.displaySystemMessage(finalUser + " has disconnected (timeout).");
-                    chatRoomUI.removeUserFromList(finalUser);
+                // Double-check UI and that the UI is still relevant for the room we just processed timeouts for.
+                // This check is more about ensuring the UI object is still valid and the controller is still focused on that room.
+                if (chatRoomUI != null && Objects.equals(currentControllerActiveRoom, this.activeRoomName)) {
+                    for (String user : timedOutUsers) {
+                        System.out.println("[Controller Timeout] User " + user + " timed out from room " + currentControllerActiveRoom);
+                        chatRoomUI.displaySystemMessage(user + " has disconnected (timeout).");
+                        chatRoomUI.removeUserFromList(user);
+                    }
                 }
             });
         }

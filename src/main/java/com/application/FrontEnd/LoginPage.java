@@ -1,24 +1,20 @@
-// src/main/java/com/application/FrontEnd/LoginPage.java
 package com.application.FrontEnd;
 
 // Backend/Component Imports
 import com.application.Backend.ChatController;
-import com.application.FrontEnd.components.CustomTextField; // Using your custom field
-import com.application.FrontEnd.components.CustomButton; // Using your custom button
-
+import com.application.FrontEnd.components.CustomTextField; 
+import com.application.FrontEnd.components.CustomButton; 
 // Standard Java Swing and AWT imports
 import javax.swing.*;
-import javax.swing.border.MatteBorder; // For underline border
 import java.awt.*;
 import java.awt.event.*;
-import javax.imageio.ImageIO; // For loading static images
-import java.io.IOException;   // For ImageIO exceptions
-import java.net.URL;        // For loading resources
+import javax.imageio.ImageIO; 
+import java.io.IOException;   
+import java.net.URL;        
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import javax.swing.border.Border; // Import Border
-import javax.swing.border.CompoundBorder; // Import CompoundBorder
-import javax.swing.border.EmptyBorder;
+
 
 
 public class LoginPage extends JPanel {

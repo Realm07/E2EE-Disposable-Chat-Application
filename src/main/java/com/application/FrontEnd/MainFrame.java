@@ -17,6 +17,19 @@ public class MainFrame extends JFrame {
     private PrivateRoomPage privateRoomPage; // Added
     private ChatController chatController; // Add reference to the controller
     private InfoPage infoPage;
+    private SettingRoom settingRoom;
+    private CardLayout cardLayout;
+    private JPanel mainViewPanel;
+
+
+    private static final String LOGIN_PAGE_CARD = "LoginPage";
+    private static final String CHAT_ROOM_CARD = "ChatRoom";
+    private static final String PUBLIC_SERVER_ROOM_CARD = "PublicServerRoom";
+    private static final String PRIVATE_ROOM_PAGE_CARD = "PrivateRoomPage";
+    private static final String INFO_PAGE_CARD = "InfoPage";
+    private static final String SETTING_ROOM_CARD = "SettingRoom";
+
+
     public static Font sansationRegular; // Make fonts accessible
     public static Font sansationBold;
 
@@ -52,120 +65,163 @@ public class MainFrame extends JFrame {
         } catch (Exception e) {
             System.err.println("Warning: Could not load application icon: " + e.getMessage());
         }
-        // --- Window Initialization Sequence ---
 
-        // 1. Add the INITIAL content panel (loginPage)
+        cardLayout = new CardLayout();
+        mainViewPanel = new JPanel(cardLayout);
+        add(mainViewPanel, BorderLayout.CENTER);
+
         loginPage = new LoginPage(this, chatController);
-        add(loginPage);
+        mainViewPanel.add(loginPage, LOGIN_PAGE_CARD);
 
-        // 2. Pack the frame to calculate initial component layout sizes
+        settingRoom = new SettingRoom(this);
+        mainViewPanel.add(settingRoom, SETTING_ROOM_CARD);
+
+        cardLayout.show(mainViewPanel, LOGIN_PAGE_CARD);
+
         pack();
 
-        // 3. Set the DESIRED SIZE after packing
-        setSize(1024, 768); // Set your desired dimensions
+        setSize(1024, 768); 
 
-        // 4. Center the frame AFTER setting the size
         setLocationRelativeTo(null);
 
-        // 5. Make visible LAST
         setVisible(true);
 
         System.out.println("MainFrame Initialized. Size: " + getSize());
     }
+
     public ChatController getChatController() {
         return chatController;
     }
-    public void switchToChatRoom(String currentUsername, String currentRoomName) {
+
+    // In MainFrame.java
+    // In MainFrame.java
+// Ensure this import is present: import java.util.List;
+    public void switchToChatRoom(String currentUsername, String currentRoomName, java.util.List<String> initialUsersInRoom) { // Use java.util.List<String>
         System.out.println("[MainFrame] Switching to ChatRoom for user: " + currentUsername + " in room: " + currentRoomName);
-        // Remove whatever panel is currently showing
-        getContentPane().removeAll(); // Remove all components from content pane
 
-        chatRoom = new ChatRoom(currentUsername, currentRoomName, this, chatController); // Pass controller
-        add(chatRoom);
-        chatController.setActiveChatRoomUI(chatRoom); // Inform controller about the active UI
+        if (chatRoom == null) {
+            System.out.println("ChatRoom instance is null in switchToChatRoom. Creating new instance.");
+            chatRoom = new ChatRoom(currentUsername, currentRoomName, this, chatController);
+            mainViewPanel.add(chatRoom, CHAT_ROOM_CARD);
+        }
+        // No cast needed here if the signature is correct
+        chatRoom.reInitializeForNewSession(currentUsername, currentRoomName, initialUsersInRoom);
 
-        // Refresh UI
-        revalidate();
-        repaint();
+        if (chatController != null) {
+            chatController.setActiveChatRoomUI(chatRoom);
+        }
+        cardLayout.show(mainViewPanel, CHAT_ROOM_CARD);
+        mainViewPanel.revalidate();
+        mainViewPanel.repaint();
+        System.out.println("[MainFrame] Switched to ChatRoom. Current users provided: " + (initialUsersInRoom != null ? initialUsersInRoom.size() : "null list"));
     }
 
     public void switchToLoginPage() {
         System.out.println("[MainFrame] Switching to LoginPage.");
-        // Remove whatever panel is currently showing
-        getContentPane().removeAll(); // Remove all components from content pane
 
-        // Deactivate chat UI if it was active
-        if (chatRoom != null) {
+        if(chatController != null){
             chatController.setActiveChatRoomUI(null);
-            chatRoom = null;
         }
-        // Release references to other pages too
-        publicServerRoom = null;
-        privateRoomPage = null;
 
+        if(loginPage == null){
+            System.err.println("Error: LoginPage instance is null. Recreating.");
+            loginPage = new LoginPage(this, chatController);
+            mainViewPanel.add(loginPage, LOGIN_PAGE_CARD);
+        }
 
-        loginPage = new LoginPage(this, chatController); // Pass controller
-        add(loginPage);
+        cardLayout.show(mainViewPanel, LOGIN_PAGE_CARD);
+        mainViewPanel.revalidate();
+        mainViewPanel.repaint();
 
-        // Refresh UI
-        revalidate();
-        repaint();
     }
 
 
     public void switchToPublicRoom(String currentUserName){
         System.out.println("[MainFrame] Switching to Public server panel for user: " + currentUserName);
-        // Remove whatever panel is currently showing
-        getContentPane().removeAll();
+        
+        if(chatController != null){
+            chatController.setActiveChatRoomUI(null);
+        }
 
-        // Release references to other pages
-        loginPage = null;
-        chatRoom = null;
-        privateRoomPage = null;
-        if (chatRoom != null) chatController.setActiveChatRoomUI(null); // Deactivate chat UI if switching from it
+        if(publicServerRoom == null){
+            publicServerRoom = new PublicServerRoom(this, currentUserName, chatController);
+            mainViewPanel.add(publicServerRoom, PUBLIC_SERVER_ROOM_CARD);
+        }
 
-        // <<< Pass the controller instance >>>
-        publicServerRoom = new PublicServerRoom(this, currentUserName, this.chatController);
-        add(publicServerRoom);
-        revalidate();
-        repaint();
+        cardLayout.show(mainViewPanel, PUBLIC_SERVER_ROOM_CARD);
+        mainViewPanel.revalidate();
+        mainViewPanel.repaint();
     }
 
-    public void switchToPrivateRoom(String currentUserName){ // Pass the username!
+    public void switchToPrivateRoom(String currentUserName){
         System.out.println("[MainFrame] Switching to Private Room Page for user: " + currentUserName);
-        // Remove whatever panel is currently showing
-        getContentPane().removeAll();
+        
+        if(chatController != null){
+            chatController.setActiveChatRoomUI(null);
+        }
 
-        // Release references to other pages
-        loginPage = null;
-        chatRoom = null;
-        publicServerRoom = null;
-        if (chatRoom != null) chatController.setActiveChatRoomUI(null); // Deactivate chat UI if switching from it
+        if(privateRoomPage == null){
+            privateRoomPage = new PrivateRoomPage(this, currentUserName);
+            mainViewPanel.add(privateRoomPage, PRIVATE_ROOM_PAGE_CARD);
+        }
 
-
-        privateRoomPage = new PrivateRoomPage(this, currentUserName); // Pass username
-        add(privateRoomPage);
-        revalidate();
-        repaint();
+        cardLayout.show(mainViewPanel, PRIVATE_ROOM_PAGE_CARD);
+        mainViewPanel.revalidate();
+        mainViewPanel.repaint();
     }
 
     public void switchToInfoPage(){
         System.out.println("[MainFrame] Switching to Information panel.");
         if(loginPage != null){
-            remove(loginPage);
-            loginPage = null;
+            infoPage = new InfoPage(this);
+            mainViewPanel.add(infoPage, INFO_PAGE_CARD);
         }
 
-        infoPage = new InfoPage(this);
-        add(infoPage);
+        cardLayout.show(mainViewPanel, INFO_PAGE_CARD);
+        mainViewPanel.revalidate();
+        mainViewPanel.repaint();
+    }
 
-        revalidate();
-        repaint(); 
+     public void switchToSettingRoom() {
+        System.out.println("[MainFrame] Switching to Setting panel.");
+        if (settingRoom == null) { 
+             System.err.println("Error: SettingRoom instance is null. Recreating.");
+            settingRoom = new SettingRoom(this);
+            mainViewPanel.add(settingRoom, SETTING_ROOM_CARD);
+        }
+        cardLayout.show(mainViewPanel, SETTING_ROOM_CARD);
+        mainViewPanel.revalidate();
+        mainViewPanel.repaint();
+    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+
+    public void showChatRoomCard() { 
+        System.out.println("[MainFrame] Showing ChatRoom card.");
+        if (chatRoom == null) { 
+            System.err.println("Error: ChatRoom instance is null when trying to show its card!");
+            switchToLoginPage(); 
+            return;
+        }
+        // if (chatController != null && chatController.getActiveChatRoomUI() == null) {
+        //     chatController.setActiveChatRoomUI(chatRoom);
+        // }
+        
+        cardLayout.show(mainViewPanel, CHAT_ROOM_CARD);
+        mainViewPanel.revalidate();
+        mainViewPanel.repaint();
+    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+
+    public void applyChatRoomBackground(String imagePath) {
+        if (chatRoom != null) {
+            chatRoom.setBackgroundImage(imagePath); // Assuming setBackgroundImage exists in ChatRoom
+        } else {
+            System.err.println("[MainFrame] Attempted to set background but ChatRoom instance is null.");
+        }
     }
 
     private static void loadCustomFonts() {
         try {
-            // Load Regular font
             InputStream regularStream = MainFrame.class.getResourceAsStream("/com/application/FrontEnd/fonts/Sansation_Regular.ttf");
             if (regularStream != null) {
                 sansationRegular = Font.createFont(Font.TRUETYPE_FONT, regularStream).deriveFont(12f); // Default size 12pt
@@ -196,13 +252,11 @@ public class MainFrame extends JFrame {
         }
     }
 
-    // --- Main Entry Point (Load fonts before creating UI) ---
+   
+
     public static void main(String[] args) {
-        // Ensure UI creation happens on the Event Dispatch Thread (EDT)
         SwingUtilities.invokeLater(() -> {
-            // Load fonts first
             loadCustomFonts();
-            // Then create the frame which uses the fonts
             new MainFrame();
         });
     }

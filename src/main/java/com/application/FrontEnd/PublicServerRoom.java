@@ -5,7 +5,6 @@ import com.application.FrontEnd.components.*;
 
 // Core Swing & AWT Imports
 import javax.swing.*;
-import javax.swing.border.Border;
 import java.awt.*;
 import java.awt.event.*; // For action/mouse listeners
 import java.awt.GridBagConstraints;
@@ -14,7 +13,6 @@ import java.awt.GridBagConstraints;
 import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.net.URL;
-import java.util.concurrent.Flow;
 
 import com.application.Backend.ChatController;
 
@@ -269,6 +267,7 @@ public class PublicServerRoom extends JPanel {
         Font nameFont = MainFrame.sansationBold.deriveFont(20f);
         Font countFont = MainFrame.sansationBold.deriveFont(22f);
         Font buttonFont = MainFrame.sansationBold.deriveFont(16f);
+        // Font buttonFont = MainFrame.sansationBold.deriveFont(16f);
 
         JLabel nameLabel = new JLabel(roomDisplayName);
         nameLabel.setFont(nameFont); nameLabel.setForeground(ROW_NAME_TEXT_COLOR);
