@@ -24,13 +24,8 @@ import javax.swing.*;
 import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.awt.event.*;
-import java.net.URI;
 
 import com.application.FrontEnd.components.CustomButton;
-// Assuming CustomLabel and CustomTextField are not strictly needed if we use standard components + styling
-// import com.application.FrontEnd.components.CustomLabel;
-// import com.application.FrontEnd.components.CustomTextField;
-
 
 public class SettingRoom extends JPanel {
 
@@ -82,13 +77,13 @@ public class SettingRoom extends JPanel {
         mainContentPanel = createMainContentPanel();
         layeredPane.add(mainContentPanel, JLayeredPane.PALETTE_LAYER);
 
-        // this.backButton = createIconButton(BACK_ICON_PATH, "\u2190", "Back");
-        // this.backButton.addActionListener(e -> {
-        //     if (this.mainFrame != null) {
-        //         mainFrame.switch();
-        //     }
-        // });
-        // layeredPane.add(this.backButton, Integer.valueOf(JLayeredPane.MODAL_LAYER));
+        this.backButton = createIconButton(BACK_ICON_PATH, "\u2190", "Back");
+        this.backButton.addActionListener(e -> {
+            if (this.mainFrame != null) {
+                mainFrame.showChatRoomCard();
+            }
+        });
+        layeredPane.add(this.backButton, Integer.valueOf(JLayeredPane.MODAL_LAYER));
 
         layeredPane.addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) { resizeAndLayoutLayeredComponents(); }

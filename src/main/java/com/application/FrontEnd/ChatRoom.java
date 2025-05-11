@@ -213,7 +213,7 @@ public class ChatRoom extends JPanel {
 
         GearButtonLabel = createLogoLabel(GEAR_LOGO_IMAGE_PATH, 30);
         DownloadButtonLabel = createLogoLabel(DOWNLOAD_LOGO_IMAGE_PATH, 30);
-        if (GearButtonLabel != null) { // Added null check for safety, though createLogoLabel should return non-null
+        if (GearButtonLabel != null) { 
             GearButtonLabel.addMouseListener(new MouseAdapter(){
                 @Override
                 public void mouseClicked(MouseEvent e){
@@ -860,29 +860,103 @@ public class ChatRoom extends JPanel {
             System.out.println("[UI] Finished updating UI for room switch.");
          });
     }
+    
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+    public void reInitializeForNewSession(String username, String roomName) {
+        SwingUtilities.invokeLater(() -> {
+            System.out.println("[ChatRoom] Re-initializing for user: " + username + ", room: " + roomName);
+
+            // Clear old state
+            this.currentUserName = username != null ? username : "UnknownUser";
+            this.activeRoomName = roomName != null ? roomName : "DefaultRoom";
+
+            if (chatListModel != null) {
+                chatListModel.clear(); // Clear chat messages
+            }
+
+            setChatScrollPaneTitle(activeRoomName);  // Update UI components
+
+            updateUserList(null); // Clear the user list
+
+            // Fetch data for new session and room
+            // List<String> onlineUsers = chatController.getOnlineUsers(roomName); // get online users using controller
+
+            // if (onlineUsers != null){
+            //     updateUserList(onlineUsers);
+            // }
+
+            List<ChatMessage> chatHistory = chatController.getChatHistory(activeRoomName);
+
+            if (chatHistory != null) {
+
+                for(ChatMessage chat : chatHistory) {
+                    chatListModel.addElement(chat);
+                }
+            }
+
+            chatScrollPane.revalidate(); // Important to re-layout components
+            chatScrollPane.repaint();
+
+            revalidate(); // Revalidate main JPanel
+            repaint();
+        });
+    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
 
     public void setChatController(ChatController controller) { this.chatController = controller; }
     public void setMainFrame(MainFrame frame) { this.mainFrame = frame; }
 
+    public void setBackgroundImage(String newImagePath){
+        
+    }
 
     private static class BackgroundImagePanel extends JPanel {
         private Image backgroundImage;
         private String errorMessage = null;
         private String imagePathUsed;
-        public BackgroundImagePanel(String imagePath) { /* ... same as before ... */
+
+        public BackgroundImagePanel(String imagePath) {
             this.imagePathUsed = imagePath;
+            loadImage(imagePath); // Use a helper to load the initial image
+            setOpaque(true); // IMPORTANT!
+        }
+
+        public void setImage(String newImagePath) {
+            System.out.println("[BGPanel] Setting new image to: " + newImagePath);
+            this.imagePathUsed = newImagePath; // Update the stored path
+            loadImage(newImagePath);          // Load the new image
+            repaint(); // Trigger a repaint to show the new image or error
+        }
+
+        private void loadImage(String imagePath) {
+            if (imagePath == null || imagePath.trim().isEmpty()) {
+                this.errorMessage = "Image path is null or empty.";
+                System.err.println("[BGPanel] " + this.errorMessage);
+                this.backgroundImage = null;
+                return;
+            }
             try {
-                URL imgUrl = getClass().getResource(imagePath);
+                URL imgUrl = ChatRoom.class.getResource(imagePath); 
+                if (imgUrl == null) { 
+                    imgUrl = BackgroundImagePanel.class.getResource(imagePath);
+                }
+
+
                 if (imgUrl != null) {
                     this.backgroundImage = ImageIO.read(imgUrl);
-                    if (this.backgroundImage == null) throw new IOException("ImageIO returned null for " + imagePath);
-                    System.out.println("[BGPanel] Loaded: " + imagePath);
-                } else { throw new IOException("Resource not found: " + imagePath); }
+                    if (this.backgroundImage == null) {
+                        throw new IOException("ImageIO.read returned null for path: " + imagePath);
+                    }
+                    this.errorMessage = null; // Clear previous errors
+                    System.out.println("[BGPanel] Loaded image: " + imagePath);
+                } else {
+                    throw new IOException("Resource not found: " + imagePath + ". Check classpath and path string.");
+                }
             } catch (IOException e) {
-                this.errorMessage = "Ex loading background: " + e.getMessage();
-                System.err.println(errorMessage); this.backgroundImage = null;
+                this.errorMessage = "Error loading background: " + e.getMessage();
+                System.err.println("[BGPanel] " + this.errorMessage + " (Path: " + imagePath + ")");
+                this.backgroundImage = null; // Ensure image is null on error
             }
-            setOpaque(true);
         }
         @Override
         protected void paintComponent(Graphics g) { /* ... same as before ... */
