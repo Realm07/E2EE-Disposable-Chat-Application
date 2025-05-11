@@ -113,7 +113,6 @@ public class MainFrame extends JFrame {
 
     public void switchToLoginPage() {
         System.out.println("[MainFrame] Switching to LoginPage.");
-        getContentPane().removeAll(); 
 
         if(chatController != null){
             chatController.setActiveChatRoomUI(null);
@@ -201,6 +200,7 @@ public class MainFrame extends JFrame {
         // if (chatController != null && chatController.getActiveChatRoomUI() == null) {
         //     chatController.setActiveChatRoomUI(chatRoom);
         // }
+        
         cardLayout.show(mainViewPanel, CHAT_ROOM_CARD);
         mainViewPanel.revalidate();
         mainViewPanel.repaint();

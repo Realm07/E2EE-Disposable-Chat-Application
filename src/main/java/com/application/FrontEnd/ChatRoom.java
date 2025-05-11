@@ -780,40 +780,49 @@ public class ChatRoom extends JPanel {
     }
 
     private void addRoomTabInternal(String roomName) {
-         if (roomName == null) {
-             System.err.println("[UI] Attempted to add a tab with a null room name. Skipping.");
-             return;
-         }
-         if (roomButtons.containsKey(roomName)) {
-             System.out.println("[UI] Tab button for " + roomName + " already exists. Skipping.");
-             return;
-         }
+        if (roomName == null) {
+            System.err.println("[UI] Attempted to add a tab with a null room name. Skipping.");
+            return;
+        }
+        if (roomButtons.containsKey(roomName)) {
+            System.out.println("[UI] Tab button for " + roomName + " already exists. Skipping duplicate add.");
+            // If it already exists, just ensure it's highlighted if it's the active room.
+            // This is usually handled by updateUIForRoomSwitch.
+            return;
+        }
         System.out.println("[UI] Creating tab button for: " + roomName);
         Random random = new Random();
-        // Ensure CustomButton handles null roomName gracefully if it's possible, though we added a check above.
         CustomButton newRoomTabButton = new CustomButton(roomName, 80, 30, new Color(random.nextInt(255), random.nextInt(255), random.nextInt(255), 120));
         newRoomTabButton.setForeground(Color.WHITE);
         newRoomTabButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
         newRoomTabButton.addActionListener(e -> {
-             System.out.println("[UI] Switch room tab button clicked for: " + roomName);
-             if (chatController != null) chatController.requestRoomSwitch(roomName);
+            System.out.println("[UI] Switch room tab button clicked for: " + roomName);
+            if (chatController != null) chatController.requestRoomSwitch(roomName);
         });
         roomButtons.put(roomName, newRoomTabButton);
+
+        // Insert before the addNewRoomButton
         int addButtonIndex = -1;
-        for(int i=0; i < roomTabPanel.getComponentCount(); i++){
-            if(roomTabPanel.getComponent(i) == addNewRoomButton){
+        for (int i = 0; i < roomTabPanel.getComponentCount(); i++) {
+            if (roomTabPanel.getComponent(i) == addNewRoomButton) {
                 addButtonIndex = i;
                 break;
             }
         }
-        if (addButtonIndex == -1) addButtonIndex = roomTabPanel.getComponentCount();
-        roomTabPanel.add(newRoomTabButton, addButtonIndex);
+
+        if (addButtonIndex != -1) {
+            roomTabPanel.add(newRoomTabButton, addButtonIndex);
+        } else {
+            // Fallback if addNewRoomButton somehow isn't found (shouldn't happen)
+            roomTabPanel.add(newRoomTabButton);
+        }
+
         roomTabPanel.revalidate();
         roomTabPanel.repaint();
         System.out.println("[UI] Tab button added and panel revalidated for: " + roomName);
     }
-
-     public void addRoomTab(String roomName) {
+    
+    public void addRoomTab(String roomName) {
           if (roomName == null) {
               System.err.println("[UI] Received request to add tab for a null room name. Ignoring.");
               return;
@@ -823,42 +832,63 @@ public class ChatRoom extends JPanel {
      }
 
     public void updateUIForRoomSwitch(String newActiveRoom) {
-         SwingUtilities.invokeLater(() -> {
-             System.out.println("[UI] Updating UI view for room switch to: " + (newActiveRoom != null ? newActiveRoom : "null room"));
-             this.activeRoomName = newActiveRoom;
-             this.setChatScrollPaneTitle(newActiveRoom); // Already handles null
-             System.out.println("[UI] Clearing chat list model.");
-             this.chatListModel.clear();
-             System.out.println("[UI] Requesting history from controller for: " + (newActiveRoom != null ? newActiveRoom : "null room"));
-             if (chatController == null) {
-                  System.err.println("[UI] Error: ChatController is null in updateUIForRoomSwitch!");
-                  return;
-             }
-             List<ChatMessage> history = (newActiveRoom != null) ? chatController.getChatHistory(newActiveRoom) : null; // Avoid asking history for null room
-             System.out.println("[UI] Received " + (history != null ? history.size() : 0) + " messages from history for " + (newActiveRoom != null ? newActiveRoom : "null room"));
-             if(history != null) {
-                 for (ChatMessage msg : history) {
-                     this.chatListModel.addElement(msg);
-                 }
-             }
-             System.out.println("[UI] Repopulated chat list model.");
-             System.out.println("[UI] Updating tab button highlighting.");
-             roomButtons.forEach((name, button) -> { // 'name' here can be null if a null key was put in roomButtons
-                 if(button != null) {
-                     if (Objects.equals(name, newActiveRoom)) { // Use Objects.equals for null-safe comparison
-                          button.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
-                      } else {
-                          Border defaultBorder = UIManager.getBorder("Button.border");
-                          button.setBorder(defaultBorder != null ? defaultBorder : BorderFactory.createEmptyBorder(2,2,2,2)); // Fallback if UIManager returns null
-                      }
-                 } else System.err.println("[UI] Warning: Found null button reference for room '" + name + "' in roomButtons map.");
-             });
-             SwingUtilities.invokeLater(() -> {
-                int lastIndex = chatListModel.getSize() - 1;
-                if (lastIndex >= 0) chatList.ensureIndexIsVisible(lastIndex);
-             });
-            System.out.println("[UI] Finished updating UI for room switch.");
-         });
+        SwingUtilities.invokeLater(() -> {
+            System.out.println("[UI ChatRoom] Updating UI view for room switch to: " + (newActiveRoom != null ? newActiveRoom : "null room"));
+            this.activeRoomName = newActiveRoom;
+            this.setChatScrollPaneTitle(newActiveRoom);
+
+            if (!Objects.equals(this.activeRoomName, "DefaultRoom") && this.activeRoomName != null) { // Assuming "DefaultRoom" is not a real tab
+                if (!roomButtons.containsKey(this.activeRoomName)) {
+                    // If the tab for the new active room doesn't exist yet, add it.
+                    // This can happen if joinOrSwitchToRoom in controller adds to joinedRoomNames
+                    // and then onConnected calls this method.
+                    addRoomTabInternal(this.activeRoomName);
+                }
+            }
+
+
+            System.out.println("[UI ChatRoom] Clearing chat list model for room switch.");
+            this.chatListModel.clear();
+
+            if (chatController == null) {
+                System.err.println("[UI ChatRoom] Error: ChatController is null in updateUIForRoomSwitch!");
+                return;
+            }
+
+            // Fetch and display history for the new active room
+            List<ChatMessage> history = (newActiveRoom != null) ? chatController.getChatHistory(newActiveRoom) : null;
+            System.out.println("[UI ChatRoom] Received " + (history != null ? history.size() : 0) + " messages from history for " + (newActiveRoom != null ? newActiveRoom : "null room"));
+            if (history != null) {
+                for (ChatMessage msg : history) {
+                    this.chatListModel.addElement(msg);
+                }
+            }
+            // Scroll to bottom
+            if (chatListModel.getSize() > 0) {
+                chatList.ensureIndexIsVisible(chatListModel.getSize() - 1);
+            }
+            System.out.println("[UI ChatRoom] Repopulated chat list model.");
+
+
+            // Fetch and update user list for the new active room
+            // List<String> onlineUsers = (newActiveRoom != null) ? chatController.getOnlineUsers(newActiveRoom) : null;
+            // updateUserList(onlineUsers); // updateUserList already handles null and current user
+
+
+            System.out.println("[UI ChatRoom] Updating tab button highlighting.");
+            roomButtons.forEach((name, button) -> {
+                if (button != null) {
+                    if (Objects.equals(name, newActiveRoom)) {
+                        button.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
+                    } else {
+                        Border defaultBorder = UIManager.getBorder("Button.border"); // Standard L&F border
+                        button.setBorder(defaultBorder != null ? defaultBorder : BorderFactory.createEmptyBorder(2, 2, 2, 2));
+                    }
+                }
+            });
+
+            System.out.println("[UI ChatRoom] Finished updating UI for room switch to: " + newActiveRoom);
+        });
     }
     
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
@@ -866,39 +896,87 @@ public class ChatRoom extends JPanel {
         SwingUtilities.invokeLater(() -> {
             System.out.println("[ChatRoom] Re-initializing for user: " + username + ", room: " + roomName);
 
-            // Clear old state
+            // Update user and active room
             this.currentUserName = username != null ? username : "UnknownUser";
             this.activeRoomName = roomName != null ? roomName : "DefaultRoom";
 
+            // Clear chat messages
             if (chatListModel != null) {
-                chatListModel.clear(); // Clear chat messages
+                chatListModel.clear();
             }
 
-            setChatScrollPaneTitle(activeRoomName);  // Update UI components
+            // Clear existing room tabs before adding the new one
+            clearAllRoomTabs(); // <<< --- ADD THIS CALL
 
-            updateUserList(null); // Clear the user list
+            // Add tab for the new active room
+            if (this.activeRoomName != null && !this.activeRoomName.equals("DefaultRoom")) { // Or some other check if "DefaultRoom" shouldn't have a tab
+                 addRoomTabInternal(this.activeRoomName); // Add and highlight the current room tab
+                 // Ensure updateUIForRoomSwitch correctly highlights this new tab.
+                 // Alternatively, addRoomTabInternal can handle initial highlighting if needed.
+            }
 
-            // Fetch data for new session and room
-            // List<String> onlineUsers = chatController.getOnlineUsers(roomName); // get online users using controller
 
-            // if (onlineUsers != null){
-            //     updateUserList(onlineUsers);
-            // }
+            // Update UI components
+            setChatScrollPaneTitle(activeRoomName);
+            updateUserList(null); // Clear and then repopulate user list (controller should provide users for the new room)
 
-            List<ChatMessage> chatHistory = chatController.getChatHistory(activeRoomName);
+            // Fetch data for new session and room from controller
+            if (chatController != null) {
 
-            if (chatHistory != null) {
+                // List<String> onlineUsers = chatController.getOnlineUsers(this.activeRoomName); // Get users for current room
+                // if (onlineUsers != null) {
+                //     updateUserList(onlineUsers);
+                // }
 
-                for(ChatMessage chat : chatHistory) {
-                    chatListModel.addElement(chat);
+                List<ChatMessage> chatHistory = chatController.getChatHistory(this.activeRoomName);
+                if (chatHistory != null) {
+                    for (ChatMessage chat : chatHistory) {
+                        chatListModel.addElement(chat);
+                    }
+                }
+                // Ensure the last message is visible after loading history
+                if (!chatListModel.isEmpty()) {
+                    chatList.ensureIndexIsVisible(chatListModel.getSize() - 1);
                 }
             }
 
-            chatScrollPane.revalidate(); // Important to re-layout components
+            // Highlight the current active room tab if it was just added
+            // This might be redundant if addRoomTabInternal or updateUIForRoomSwitch handles it,
+            // but ensure it's done. For simplicity, updateUIForRoomSwitch is good for this.
+            updateUIForRoomSwitch(this.activeRoomName);
+
+
+            chatScrollPane.revalidate();
             chatScrollPane.repaint();
 
-            revalidate(); // Revalidate main JPanel
+            revalidate();
             repaint();
+            System.out.println("[ChatRoom] Re-initialization complete for room: " + this.activeRoomName);
+        });
+    }
+
+    public void clearAllRoomTabs() {
+        SwingUtilities.invokeLater(() -> {
+            if (roomTabPanel == null || roomButtons == null || addNewRoomButton == null) {
+                System.err.println("[ChatRoom] Cannot clear room tabs: essential components are null.");
+                return;
+            }
+            System.out.println("[ChatRoom UI] Clearing all room tabs.");
+
+            // Remove all components from roomTabPanel
+            roomTabPanel.removeAll();
+
+            // Clear the tracking map
+            roomButtons.clear();
+
+            // Re-add the "Add New Room" button
+            // Ensure addNewRoomButton is still valid and its listeners are intact.
+            // If addNewRoomButton was also removed and needs to be recreated, do that here.
+            // Assuming addNewRoomButton itself is persistent:
+            roomTabPanel.add(addNewRoomButton);
+
+            roomTabPanel.revalidate();
+            roomTabPanel.repaint();
         });
     }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
@@ -907,7 +985,20 @@ public class ChatRoom extends JPanel {
     public void setMainFrame(MainFrame frame) { this.mainFrame = frame; }
 
     public void setBackgroundImage(String newImagePath){
-        
+        SwingUtilities.invokeLater(() -> {
+            if (this.backgroundPanel != null) {
+                this.backgroundPanel.setImage(newImagePath); 
+                 if (this.layeredPane != null) {
+                     this.resizeAndLayoutLayeredComponents(); 
+                     this.layeredPane.revalidate();
+                     this.layeredPane.repaint();
+                 } else {
+                     this.backgroundPanel.repaint(); 
+                 }
+            } else {
+                System.err.println("[ChatRoom] Cannot set background, backgroundPanel instance is null.");
+            }
+        });
     }
 
     private static class BackgroundImagePanel extends JPanel {

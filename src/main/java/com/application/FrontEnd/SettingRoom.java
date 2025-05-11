@@ -1,8 +1,5 @@
 package com.application.FrontEnd;
 
-/////////////////////////////////////////////////
-/// to display initials or images call the InitialCircle here and put a condition if setDefault send Initial else render image 
-
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -29,23 +26,20 @@ import com.application.FrontEnd.components.CustomButton;
 
 public class SettingRoom extends JPanel {
 
-    // --- UI Components ---
     private JCheckBox saveUsernameCheckBox;
     private JCheckBox trustLinksCheckBox;
     private JButton backButton;
     private String selectedAvatarPath = null;
-    private Object selectedChatBackgroundSource = new Color(45,45,45); // Default BG color
 
-    // --- Layout Panels ---
     private JPanel mainContentPanel;
     private JLayeredPane layeredPane;
-    private BackgroundImagePanel backgroundPanel;
+    private BackgroundImagePanel overallBackgroundPanel; // Renamed for clarity
 
-    // --- Constants ---
     private static final String OVERALL_BACKGROUND_IMAGE_PATH = "/com/application/FrontEnd/images/BG_LoginPage.jpg";
     private static final String BACK_ICON_PATH = "/com/application/FrontEnd/images/ICON_Back.png";
-    // Remove CHECK_MARK_ICON_PATH as currentProfilePicDisplayLabel is removed
-    // private static final String CHECK_MARK_ICON_PATH = "/com/application/FrontEnd/images/ICON_Checkmark_Large.png";
+
+    // This will store the path or Color object for the CHAT background
+    private Object selectedChatBackgroundSource = OVERALL_BACKGROUND_IMAGE_PATH; // Initialize with a default
 
     private static final String DEER_ICON_PATH = "/com/application/FrontEnd/images/Animal/deer.png";
     private static final String BUTTERFLY_ICON_PATH = "/com/application/FrontEnd/images/Animal/butterfly.png";
@@ -58,29 +52,34 @@ public class SettingRoom extends JPanel {
     private static final String PELICAN_ICON_PATH = "/com/application/FrontEnd/images/Animal/pelican.png";
 
     private String[] animalIconPaths = {DEER_ICON_PATH, BUTTERFLY_ICON_PATH, CAT_ICON_PATH, KOI_ICON_PATH, SHARK_ICON_PATH, MACAW_ICON_PATH, JAGUAR_ICON_PATH, TURTLE_ICON_PATH, PELICAN_ICON_PATH};
-    // Remove currentProfilePicDisplayLabel as per request
-    // private JLabel currentProfilePicDisplayLabel;
     private MainFrame mainFrame;
+    private JPanel currentlySelectedChatBgPreview = null;
 
 
     public SettingRoom(MainFrame mainFrame) {
         this.mainFrame = mainFrame;
+
         setLayout(new BorderLayout());
         setOpaque(false);
 
         layeredPane = new JLayeredPane();
         add(layeredPane, BorderLayout.CENTER);
 
-        backgroundPanel = new BackgroundImagePanel(OVERALL_BACKGROUND_IMAGE_PATH);
-        layeredPane.add(backgroundPanel, JLayeredPane.DEFAULT_LAYER);
+        overallBackgroundPanel = new BackgroundImagePanel(OVERALL_BACKGROUND_IMAGE_PATH);
+        layeredPane.add(overallBackgroundPanel, JLayeredPane.DEFAULT_LAYER);
 
         mainContentPanel = createMainContentPanel();
         layeredPane.add(mainContentPanel, JLayeredPane.PALETTE_LAYER);
 
-        this.backButton = createIconButton(BACK_ICON_PATH, "\u2190", "Back");
+        this.backButton = createIconButton(BACK_ICON_PATH, "\u2190", "Back to Chat");
         this.backButton.addActionListener(e -> {
             if (this.mainFrame != null) {
-                mainFrame.showChatRoomCard();
+                if (selectedChatBackgroundSource instanceof String) {
+                    mainFrame.applyChatRoomBackground((String) selectedChatBackgroundSource);
+                } else if (selectedChatBackgroundSource instanceof Color) {
+                    System.out.println("Color background selected, but ChatRoom background change might only support images currently.");
+                }
+                mainFrame.showChatRoomCard(); // Use the method that doesn't take a path if path is handled internally by applyChatRoomBackground
             }
         });
         layeredPane.add(this.backButton, Integer.valueOf(JLayeredPane.MODAL_LAYER));
@@ -95,8 +94,8 @@ public class SettingRoom extends JPanel {
         JLabel label = new JLabel(text);
         label.setFont(MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(20f) : new Font("SansSerif", Font.BOLD, 20));
         label.setForeground(Color.WHITE);
-        label.setBorder(BorderFactory.createEmptyBorder(0, 5, 10, 0)); // Added left padding of 5
-        label.setAlignmentX(Component.LEFT_ALIGNMENT); // Ensure it aligns left in BoxLayout
+        label.setBorder(BorderFactory.createEmptyBorder(0, 5, 10, 0));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
         return label;
     }
 
@@ -140,18 +139,16 @@ public class SettingRoom extends JPanel {
         JPanel contentStack = new JPanel();
         contentStack.setLayout(new BoxLayout(contentStack, BoxLayout.Y_AXIS));
         contentStack.setOpaque(false);
-        // contentStack.setAlignmentX(Component.LEFT_ALIGNMENT); // This won't directly center contentStack if its parent is BorderLayout.CENTER
 
-        // General Section
         JPanel generalSection = new JPanel();
         generalSection.setLayout(new BoxLayout(generalSection, BoxLayout.Y_AXIS));
         generalSection.setOpaque(false);
-        generalSection.setAlignmentX(Component.LEFT_ALIGNMENT); // For content within generalSection
+        generalSection.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        generalSection.add(createSectionTitleLabel("General")); // Label will be left-aligned due to its own setAlignmentX and border
+        generalSection.add(createSectionTitleLabel("General"));
         generalSection.add(Box.createRigidArea(new Dimension(0, 8)));
         JPanel saveUserItem = createCheckBoxSettingItem("Save Username for Later", true, "saveUsername");
-        saveUserItem.setAlignmentX(Component.LEFT_ALIGNMENT); // Align the whole item bar left
+        saveUserItem.setAlignmentX(Component.LEFT_ALIGNMENT);
         generalSection.add(saveUserItem);
         generalSection.add(Box.createRigidArea(new Dimension(0, 12)));
         JPanel trustLinksItem = createCheckBoxSettingItem("Always trust download links", false, "trustLinks");
@@ -159,22 +156,21 @@ public class SettingRoom extends JPanel {
                 BorderFactory.createLineBorder(new Color(0, 120, 255), 2),
                 BorderFactory.createEmptyBorder(13, 18, 13, 18)
         ));
-        trustLinksItem.setAlignmentX(Component.LEFT_ALIGNMENT); // Align the whole item bar left
+        trustLinksItem.setAlignmentX(Component.LEFT_ALIGNMENT);
         generalSection.add(trustLinksItem);
         contentStack.add(generalSection);
 
         contentStack.add(Box.createRigidArea(new Dimension(0, 35)));
 
-        // User Section
         JPanel userSection = new JPanel();
         userSection.setLayout(new BoxLayout(userSection, BoxLayout.Y_AXIS));
         userSection.setOpaque(false);
-        userSection.setAlignmentX(Component.LEFT_ALIGNMENT); // For content within userSection
+        userSection.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        userSection.add(createSectionTitleLabel("User")); // Label will be left-aligned
+        userSection.add(createSectionTitleLabel("User"));
         userSection.add(Box.createRigidArea(new Dimension(0, 8)));
         JPanel userCustomization = createUserCustomizationPanel();
-        userCustomization.setAlignmentX(Component.LEFT_ALIGNMENT); // Align the customization panel group left
+        userCustomization.setAlignmentX(Component.LEFT_ALIGNMENT);
         userSection.add(userCustomization);
         contentStack.add(userSection);
         
@@ -191,16 +187,16 @@ public class SettingRoom extends JPanel {
 
         gbc.gridx = 0;
         gbc.gridy = 0;
-        gbc.weightx = 0.33;
+        gbc.weightx = 0.33; // Adjusted weight
+        gbc.weighty = 1.0; // Allow vertical expansion
         gbc.fill = GridBagConstraints.BOTH;
-        gbc.anchor = GridBagConstraints.NORTHWEST; // Align this card to the top-left of its cell
-        gbc.insets = new Insets(0, 0, 0, 10);
+        gbc.anchor = GridBagConstraints.NORTHWEST;
+        gbc.insets = new Insets(0, 0, 0, 15); // Increased right inset
         customizationPanel.add(createProfilePicturePanel(), gbc);
 
         gbc.gridx = 1;
-        gbc.weightx = 0.67;
-        gbc.insets = new Insets(0, 10, 0, 0);
-        // gbc.anchor will still be NORTHWEST from previous setting for this column as well
+        gbc.weightx = 0.67; // Adjusted weight
+        gbc.insets = new Insets(0, 0, 0, 0); // Removed left inset, relying on previous right inset
         customizationPanel.add(createChatBackgroundPanel(), gbc);
 
         return customizationPanel;
@@ -218,12 +214,6 @@ public class SettingRoom extends JPanel {
         title.setHorizontalAlignment(SwingConstants.CENTER);
         panel.add(title, BorderLayout.NORTH);
 
-        // Removed currentProfilePicDisplayLabel from here
-        // The avatarGrid will be in the CENTER now
-
-        JPanel bottomSection = new JPanel(new BorderLayout(0,10));
-        bottomSection.setOpaque(false);
-
         JPanel avatarGrid = new JPanel(new GridLayout(0, 3, 8, 8));
         avatarGrid.setOpaque(false);
         avatarGrid.setBorder(BorderFactory.createEmptyBorder(10,0,10,0));
@@ -231,28 +221,24 @@ public class SettingRoom extends JPanel {
             JLabel avatarLabel = createSelectionImageLabel(path, 45, 45, avatarGrid, true, true);
             avatarGrid.add(avatarLabel);
         }
-        // Instead of adding avatarGrid to bottomSection's CENTER, we add it directly to panel's CENTER
-        // This makes avatarGrid the main central component of the profile picture panel
         panel.add(avatarGrid, BorderLayout.CENTER);
-
 
         JButton setDefaultButton = new CustomButton("Set Default", 0, 35, new Color(180, 80, 80));
         if (MainFrame.sansationRegular != null) setDefaultButton.setFont(MainFrame.sansationRegular.deriveFont(14f));
         setDefaultButton.setForeground(Color.WHITE);
+        setDefaultButton.setPreferredSize(new Dimension(120,35));
+        setDefaultButton.addActionListener(e -> {
+            selectedAvatarPath = null; // Or a path to a default avatar image
+            // You might want to update some visual indicator for avatar selection here
+            System.out.println("Avatar set to default (null path).");
+        });
+
         JPanel buttonWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER));
         buttonWrapper.setOpaque(false);
         buttonWrapper.add(setDefaultButton);
-        setDefaultButton.setPreferredSize(new Dimension(120,35));
-
-        // Add the button wrapper directly to the panel's SOUTH
         panel.add(buttonWrapper, BorderLayout.SOUTH);
-        // bottomControls is no longer needed as its children are now directly in 'panel'
         return panel;
     }
-
-    // updateCurrentProfilePicDisplay is no longer needed as currentProfilePicDisplayLabel is removed
-    // private void updateCurrentProfilePicDisplay(String imagePath) { ... }
-
 
     private JLabel createSelectionImageLabel(String path, int w, int h, JPanel parentGroup, boolean isAvatar, boolean noDefaultBorder) {
         JLabel label = createGenericImageLabel(path, w, h);
@@ -262,6 +248,13 @@ public class SettingRoom extends JPanel {
         } else {
             label.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
         }
+
+        // Check if this avatar is initially selected
+        if (isAvatar && path.equals(selectedAvatarPath)) {
+            label.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
+        }
+
+
         label.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -274,12 +267,9 @@ public class SettingRoom extends JPanel {
                 label.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
                 if (isAvatar) {
                     selectedAvatarPath = path;
-                    // Removed call to updateCurrentProfilePicDisplay
                     System.out.println("Avatar selected: " + path);
-                } else { // This 'else' branch is for background selection images
-                    selectedChatBackgroundSource = path;
-                    System.out.println("Background selected (image path): " + path);
                 }
+                // This method is for avatars only now, background selection is separate
             }
         });
         return label;
@@ -300,70 +290,114 @@ public class SettingRoom extends JPanel {
         JPanel backgroundGrid = new JPanel(new GridLayout(0, 3, 10, 10));
         backgroundGrid.setOpaque(false);
 
-        JPanel defaultBgPanel = createBackgroundPreviewPanel("Default", new Color(30,30,30), backgroundGrid, true);
-        defaultBgPanel.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
-        backgroundGrid.add(defaultBgPanel);
+        String wavesPath = "/com/application/FrontEnd/images/BG_LoginPage.jpg"; // Define your paths
+        String darkTechPath = "/com/application/FrontEnd/images/BG_PublicRooms.png";
+        Color oceanColor = new Color(60, 120, 180);
+        Color forestColor = new Color(50, 100, 50);
+        Color sunsetColor = new Color(200, 100, 50);
 
-        backgroundGrid.add(createBackgroundPreviewPanel("Ocean", new Color(60, 120, 180), backgroundGrid, true));
-        backgroundGrid.add(createBackgroundPreviewPanel("Forest", new Color(50, 100, 50), backgroundGrid, true));
-        backgroundGrid.add(createBackgroundPreviewPanel("Sunset", new Color(200, 100, 50), backgroundGrid, true));
-        backgroundGrid.add(createBackgroundPreviewPanel("Waves", OVERALL_BACKGROUND_IMAGE_PATH, backgroundGrid, true));
-        backgroundGrid.add(createBackgroundPreviewPanel("Dark Tech", "/com/application/FrontEnd/images/BG_PublicRooms.png", backgroundGrid, true)); // Corrected path typo from image
 
-        panel.add(backgroundGrid, BorderLayout.CENTER); // Directly add the grid
+        backgroundGrid.add(createBackgroundPreviewPanel("Waves", wavesPath, wavesPath.equals(selectedChatBackgroundSource)));
+        backgroundGrid.add(createBackgroundPreviewPanel("Dark Tech", darkTechPath, darkTechPath.equals(selectedChatBackgroundSource)));
+        backgroundGrid.add(createBackgroundPreviewPanel("Ocean", oceanColor, oceanColor.equals(selectedChatBackgroundSource)));
+        backgroundGrid.add(createBackgroundPreviewPanel("Forest", forestColor, forestColor.equals(selectedChatBackgroundSource)));
+        backgroundGrid.add(createBackgroundPreviewPanel("Sunset", sunsetColor, sunsetColor.equals(selectedChatBackgroundSource)));
+        
+        JScrollPane scrollPane = new JScrollPane(backgroundGrid);
+        scrollPane.setOpaque(false);
+        scrollPane.getViewport().setOpaque(false);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+
+        panel.add(scrollPane, BorderLayout.CENTER);
         return panel;
     }
 
-    private JPanel createBackgroundPreviewPanel(String name, Object bgSource, JPanel parentGroup, boolean noDefaultBorder) {
-        JPanel previewPanel = new JPanel(new BorderLayout(0,3));
-        previewPanel.setPreferredSize(new Dimension(100, 75));
-        if (noDefaultBorder) {
-            previewPanel.setBorder(BorderFactory.createEmptyBorder(2,2,2,2)); // Slightly more empty border
-        } else {
-            previewPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-        }
+
+    private JPanel createBackgroundPreviewPanel(String name, Object bgSource, boolean initiallySelected) {
+        JPanel previewPanel = new JPanel(new BorderLayout());
         previewPanel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        previewPanel.setPreferredSize(new Dimension(100, 75)); // Smaller previews
+        previewPanel.setOpaque(true); // Panel itself is opaque to show its border and potentially a base color
+        previewPanel.setBackground(new Color(60,60,60)); // A base color for the preview panel
 
-        JLabel nameLabel = new JLabel(name, SwingConstants.CENTER);
-        nameLabel.setFont(MainFrame.sansationRegular != null ? MainFrame.sansationRegular.deriveFont(11f) : new Font("SansSerif", Font.PLAIN, 11));
+        previewPanel.putClientProperty("bgSource", bgSource); // Store the actual source (String path or Color)
+        previewPanel.putClientProperty("bgName", name);
 
-        if (bgSource instanceof Color) {
-            previewPanel.setBackground((Color) bgSource);
-            previewPanel.setOpaque(true);
-            if (isColorLight((Color)bgSource)) nameLabel.setForeground(Color.BLACK); else nameLabel.setForeground(Color.WHITE);
-        } else if (bgSource instanceof String) {
-            JLabel imgLabel = createGenericImageLabel((String)bgSource, 96, 56); // Adjusted for border
-            previewPanel.add(imgLabel, BorderLayout.CENTER);
-            previewPanel.setOpaque(false);
-            nameLabel.setForeground(Color.WHITE);
-            nameLabel.setBackground(new Color(0,0,0,120));
-            nameLabel.setOpaque(true);
-        }
-        previewPanel.add(nameLabel, BorderLayout.SOUTH);
-
-        previewPanel.addMouseListener(new MouseAdapter() {
-             @Override
-            public void mouseClicked(MouseEvent e) {
-                for (Component c : parentGroup.getComponents()) {
-                    if (c instanceof JPanel) {
-                        if (noDefaultBorder) ((JPanel)c).setBorder(BorderFactory.createEmptyBorder(2,2,2,2));
-                        else ((JPanel)c).setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        JPanel visualDisplayArea = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (bgSource instanceof Color) {
+                    g2d.setColor((Color) bgSource);
+                    g2d.fillRect(0, 0, getWidth(), getHeight());
+                } else if (bgSource instanceof String) {
+                    try {
+                        URL imgUrl = SettingRoom.class.getResource((String) bgSource);
+                        if (imgUrl != null) {
+                            Image img = ImageIO.read(imgUrl);
+                            if (img != null) {
+                                g2d.drawImage(img, 0, 0, getWidth(), getHeight(), this); // Scale to fill
+                            } else { drawPlaceholder(g2d, "No Img"); }
+                        } else { drawPlaceholder(g2d, "Path Err"); }
+                    } catch (IOException ex) {
+                        drawPlaceholder(g2d, "Load Err");
+                        System.err.println("Error loading preview " + name + ": " + ex.getMessage());
                     }
                 }
-                previewPanel.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
-                selectedChatBackgroundSource = bgSource;
-                System.out.println("Chat background selected: " + name);
+                g2d.dispose();
+            }
+            private void drawPlaceholder(Graphics2D g2d, String text) {
+                g2d.setColor(Color.DARK_GRAY);
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+                g2d.setColor(Color.LIGHT_GRAY);
+                FontMetrics fm = g2d.getFontMetrics();
+                g2d.drawString(text, (getWidth() - fm.stringWidth(text)) / 2, getHeight() / 2 + fm.getAscent() / 2);
+            }
+        };
+        previewPanel.add(visualDisplayArea, BorderLayout.CENTER);
+
+        JLabel nameLabel = new JLabel(name, SwingConstants.CENTER);
+        nameLabel.setFont(MainFrame.sansationRegular != null ? MainFrame.sansationRegular.deriveFont(10f) : new Font("SansSerif", Font.PLAIN, 10));
+        nameLabel.setForeground(Color.LIGHT_GRAY);
+        nameLabel.setOpaque(true);
+        nameLabel.setBackground(new Color(0,0,0,100)); // Semi-transparent black for better readability
+        previewPanel.add(nameLabel, BorderLayout.SOUTH);
+
+        if (initiallySelected) {
+            previewPanel.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
+            this.currentlySelectedChatBgPreview = previewPanel;
+        } else {
+            previewPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+        }
+
+        previewPanel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                JPanel clickedPanel = (JPanel) e.getSource();
+                Object newBgSource = clickedPanel.getClientProperty("bgSource");
+                String newBgName = (String) clickedPanel.getClientProperty("bgName");
+
+                System.out.println("[SettingRoom] Chat BG Preview '" + newBgName + "' clicked. Source: " + newBgSource);
+
+                if (currentlySelectedChatBgPreview != null) {
+                    currentlySelectedChatBgPreview.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+                }
+                clickedPanel.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
+                currentlySelectedChatBgPreview = clickedPanel;
+
+                selectedChatBackgroundSource = newBgSource; // Store String path or Color object
+                System.out.println("[SettingRoom] New selectedChatBackgroundSource: " + selectedChatBackgroundSource);
             }
         });
         return previewPanel;
     }
 
-    private boolean isColorLight(Color color) {
-        double luminance = (0.299 * color.getRed() + 0.587 * color.getGreen() + 0.114 * color.getBlue()) / 255;
-        return luminance > 0.5;
-    }
 
     private JLabel createGenericImageLabel(String path, int targetWidth, int targetHeight) {
+        // ... (This method seems fine for avatar selection, keep as is if it works for that purpose)
         JLabel label = new JLabel();
         label.setHorizontalAlignment(SwingConstants.CENTER);
         label.setVerticalAlignment(SwingConstants.CENTER);
@@ -393,32 +427,33 @@ public class SettingRoom extends JPanel {
             label.setForeground(Color.RED);
             label.setFont(new Font("SansSerif", Font.BOLD, Math.min(targetWidth, targetHeight) / 2 + 2));
             label.setPreferredSize(new Dimension(targetWidth > 0 ? targetWidth : 30, targetHeight > 0 ? targetHeight : 30));
-            // Removed border on error to comply with "no border on images"
         }
         return label;
     }
 
     private void saveSettings() {
+        // ... (This method can remain for other settings) ...
         boolean saveUser = false; if(saveUsernameCheckBox!=null) saveUser = saveUsernameCheckBox.isSelected();
         boolean trustLinks = false; if(trustLinksCheckBox!=null) trustLinks = trustLinksCheckBox.isSelected();
         System.out.println("Saving Settings:");
         System.out.println("  Save Username: " + saveUser);
         System.out.println("  Trust Links: " + trustLinks);
         System.out.println("  Avatar: " + selectedAvatarPath);
-        System.out.println("  Chat Background: " + selectedChatBackgroundSource);
+        System.out.println("  Chat Background Source: " + selectedChatBackgroundSource); // Log the Object
         JOptionPane.showMessageDialog(this, "Settings applied (simulation).", "Settings Update", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void resizeAndLayoutLayeredComponents() {
+        // ... (This method can remain as is) ...
         SwingUtilities.invokeLater(() -> {
             int layeredWidth = getWidth(); int layeredHeight = getHeight(); if (layeredWidth <= 0 || layeredHeight <= 0) return;
-            if (backgroundPanel != null) backgroundPanel.setBounds(0, 0, layeredWidth, layeredHeight);
+            if (overallBackgroundPanel != null) overallBackgroundPanel.setBounds(0, 0, layeredWidth, layeredHeight);
             if (mainContentPanel != null) {
                 Dimension panelPrefSize = mainContentPanel.getPreferredSize();
-                int panelW = Math.min(panelPrefSize.width + 150, layeredWidth - 40); // Increased allowance
-                panelW = Math.max(800, panelW); // Increased min width
-                int panelH = Math.min(panelPrefSize.height + 150, layeredHeight - 40); // Increased allowance
-                panelH = Math.max(700, panelH); // Increased min height
+                int panelW = Math.min(panelPrefSize.width + 150, layeredWidth - 40); 
+                panelW = Math.max(800, panelW); 
+                int panelH = Math.min(panelPrefSize.height + 150, layeredHeight - 40); 
+                panelH = Math.max(700, panelH); 
                 int x = (layeredWidth - panelW) / 2; int y = (layeredHeight - panelH) / 2; y = Math.max(y, 20);
                 mainContentPanel.setBounds(x, y, panelW, panelH);
             }
@@ -428,6 +463,7 @@ public class SettingRoom extends JPanel {
     }
 
     private JButton createIconButton(String iconPath, String fallbackText, String tooltip) {
+        // ... (This method can remain as is) ...
         JButton button = new JButton(); button.setToolTipText(tooltip); button.setPreferredSize(new Dimension(40, 40)); button.setFocusPainted(false); button.setBorderPainted(false); button.setContentAreaFilled(false); button.setOpaque(false); button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         try {
             URL iconUrl = getClass().getResource(iconPath); if (iconUrl == null) throw new IOException("Icon resource not found: " + iconPath);
@@ -438,11 +474,12 @@ public class SettingRoom extends JPanel {
         } return button;
     }
 
+    // Renamed the inner class to avoid conflict if you had BackgroundImagePanel in ChatRoom too
     private static class BackgroundImagePanel extends JPanel {
         private Image backgroundImage; private String errorMessage = null; private String imagePathUsed;
         public BackgroundImagePanel(String imagePath) { this.imagePathUsed = imagePath; try { URL imgUrl = getClass().getResource(imagePath); if (imgUrl != null) { this.backgroundImage = ImageIO.read(imgUrl); if (this.backgroundImage == null) throw new IOException("ImageIO returned null for " + imagePath); } else { throw new IOException("Resource not found: " + imagePath); } } catch (IOException e) { this.errorMessage = "Ex loading background ("+imagePath+"): " + e.getMessage(); System.err.println(errorMessage); this.backgroundImage = null; } setOpaque(true); }
         @Override protected void paintComponent(Graphics g) { super.paintComponent(g); if (backgroundImage != null) { Graphics2D g2d = (Graphics2D) g.create(); int panelW = getWidth(); int panelH = getHeight(); if (panelW <=0 || panelH <= 0) { g2d.dispose(); return; } int imgW = backgroundImage.getWidth(this); int imgH = backgroundImage.getHeight(this); if(imgW <=0 || imgH <= 0) { g2d.dispose(); return; } double imgAspect = (double) imgW / imgH; double panelAspect = (double) panelW / panelH; int drawW, drawH, drawX, drawY; if (panelAspect > imgAspect) { drawW = panelW; drawH = (int)(panelW / imgAspect); drawX = 0; drawY = (panelH - drawH) / 2; } else { drawH = panelH; drawW = (int)(panelH * imgAspect); drawX = (panelW - drawW) / 2; drawY = 0; } g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR); g2d.drawImage(backgroundImage, drawX, drawY, drawW, drawH, this); g2d.dispose();
-            } else { g.setColor(new Color(25, 25, 25)); g.fillRect(0, 0, getWidth(), getHeight()); g.setColor(Color.YELLOW); g.setFont(new Font("SansSerif", Font.BOLD, 14)); FontMetrics fm = g.getFontMetrics(); String text = "BG Load Error: " + (errorMessage != null ? errorMessage : "Unknown"); int msgWidth = fm.stringWidth(text); g.drawString(text, Math.max(5, (getWidth() - msgWidth) / 2), getHeight() / 2 + fm.getAscent() / 2 - fm.getHeight()/2); String pathText = "(" + imagePathUsed + ")"; msgWidth = fm.stringWidth(pathText); g.drawString(pathText, Math.max(5, (getWidth() - msgWidth) / 2), getHeight() / 2 + fm.getAscent() / 2 + fm.getHeight()/2); }
+            } else { g.setColor(new Color(25, 25, 25)); g.fillRect(0, 0, getWidth(), getHeight()); g.setColor(Color.YELLOW); g.setFont(new Font("SansSerif", Font.BOLD, 14)); FontMetrics fm = g.getFontMetrics(); String text = "BG Load Error: " + (errorMessage != null ? errorMessage : "Unknown") + " (Path: " + imagePathUsed + ")"; int msgWidth = fm.stringWidth(text); g.drawString(text, Math.max(5, (getWidth() - msgWidth) / 2), getHeight() / 2 + fm.getAscent() / 2); }
         }
     }
 }
