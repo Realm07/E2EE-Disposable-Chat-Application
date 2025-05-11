@@ -77,6 +77,8 @@ public class ChatRoom extends JPanel {
     private JLabel GearButtonLabel;
     private JLabel DownloadButtonLabel; // For chat history download
 
+    private JScrollPane roomTabScrollPanel;
+
     // --- Invitation Panel Components ---
     private JPanel invitationPanel;
     private JTextArea invitationLabel;
@@ -183,14 +185,14 @@ public class ChatRoom extends JPanel {
         JPanel leftColumnPanel = createLeftPanel();
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        splitPane.setLeftComponent(leftColumnPanel);
         splitPane.setRightComponent(rightColumnPanel);
-        splitPane.setDividerLocation(0.75); // Initial proportion for left panel
-        splitPane.setResizeWeight(0.75);   // Left panel gets more resize weight
+        splitPane.setLeftComponent(leftColumnPanel);
+        splitPane.setDividerLocation(800);
+        splitPane.setResizeWeight(1);
         splitPane.setOpaque(false);
         splitPane.setContinuousLayout(true);
         splitPane.setBorder(null);
-        splitPane.setDividerSize(8);
+        splitPane.setDividerSize(0);
 
         mainContentPanel.add(splitPane, BorderLayout.CENTER);
     }
@@ -201,39 +203,51 @@ public class ChatRoom extends JPanel {
         leftPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5)); // Padding on right for divider
 
         // --- Room Tab Panel ---
-        roomTabPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 3)); // Added small vgap
+        roomTabPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0)); // Added small vgap
         roomTabPanel.setOpaque(false); // Panel itself is transparent
-        roomTabPanel.setBorder(BorderFactory.createEmptyBorder(5,5,5,5)); // Padding for content
+        roomTabPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10)); // Padding for content
 
         if (this.activeRoomName != null) {
             addRoomTabInternal(activeRoomName); // Add initial room tab
         }
-        addNewRoomButton = new CustomButton("+", 40, 28, new Color(150, 100, 150)); // Slightly smaller
-        addNewRoomButton.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        addNewRoomButton.setBorder(BorderFactory.createEmptyBorder(0,0,2,0)); // Align better
+        addNewRoomButton = new CustomButton("+", 50, 30, new Color(150, 100, 150)); // Slightly smaller
+        addNewRoomButton.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        addNewRoomButton.setBorder(BorderFactory.createEmptyBorder(0,0,5,0)); // Align better
         roomTabPanel.add(addNewRoomButton);
 
         // Scrollable container for room tabs with custom background
-        JScrollPane roomTabScrollPanel = new JScrollPane(roomTabPanel){
-            private final int cornerRadius = 20;
-            private final float fillAlpha = 120 / 255.0f; // Semi-transparent
-            private final Color fillColor = new Color(80, 80, 80);
+        roomTabScrollPanel = new JScrollPane(roomTabPanel){
+            private int cornerRadius = 25;
+            private float fillAlpha = 120 / 255.0f;
+            private Color fillColor = new Color(102, 102, 102);
+            private float borderAlpha = 200 / 255.0f;
+            private Color borderColor = new Color(150, 150, 150);
+            private int borderThickness = 1;
             @Override
             protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
                 Graphics2D g2d = (Graphics2D) g.create();
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
                 g2d.setColor(fillColor);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+                if (borderThickness > 0) {
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+                    g2d.setColor(borderColor);
+                    g2d.setStroke(new BasicStroke(borderThickness));
+                    int B = borderThickness;
+                    g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+                }
                 g2d.dispose();
-                super.paintComponent(g); // Paints children (roomTabPanel)
             }
         };
+        
         roomTabScrollPanel.setOpaque(false);
         roomTabScrollPanel.getViewport().setOpaque(false);
         roomTabScrollPanel.setBorder(null); // No extra border for the scroll pane itself
         roomTabScrollPanel.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
         roomTabScrollPanel.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+
         JScrollBar horizontalScrollBar = roomTabScrollPanel.getHorizontalScrollBar();
         horizontalScrollBar.setPreferredSize(new Dimension(0, 8)); // Slimmer scrollbar
         horizontalScrollBar.setOpaque(false);
@@ -245,9 +259,11 @@ public class ChatRoom extends JPanel {
         chatList.setOpaque(false); // List itself is transparent to see panel bg
         chatList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         chatList.setFocusable(false);
+        chatList.setSelectionBackground(null);
         chatList.setSelectionBackground(new Color(80, 80, 80, 180)); // Selection color
         chatList.setSelectionForeground(Color.WHITE);
-
+        
+        
         chatScrollPane = new JScrollPane(chatList);
         chatScrollPane.setOpaque(false);
         chatScrollPane.getViewport().setOpaque(false);
@@ -265,13 +281,12 @@ public class ChatRoom extends JPanel {
 
 
         // --- Input Area ---
-        chatTextField = new CustomTextField(300, 35); // Slightly taller
-        chatTextField.setBackground(new Color(50, 50, 50));
+        chatTextField = new CustomTextField(300, 30);
+        chatTextField.setBackground(new Color(70, 70, 70));
         chatTextField.setForeground(Color.WHITE);
-        chatTextField.setFont(new Font("SansSerif", Font.PLAIN, 14));
-        chatTextField.setBorder(BorderFactory.createEmptyBorder(5,10,5,10)); // Padding inside text field
+        chatTextField.setBorder(null);
 
-        sendButton = new CustomButton("Send", 70, 33, new Color(100, 220, 100));
+        sendButton = new CustomButton("Send", 70, 33, new Color(102, 255, 102));
         sendButton.setForeground(Color.BLACK);
         sendButton.setFont(new Font("SansSerif", Font.BOLD, 13));
 
@@ -279,9 +294,10 @@ public class ChatRoom extends JPanel {
         emojiButton.setForeground(Color.DARK_GRAY);
         emojiButton.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 16));
 
-        fileSendButton = new CustomButton("+", 40, 33, new Color(200, 200, 200));
-        fileSendButton.setForeground(Color.DARK_GRAY);
+        fileSendButton = new CustomButton("+", 30, 30, new Color(255, 255, 255));
+        fileSendButton.setForeground(Color.BLACK);
         fileSendButton.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        fileSendButton.setBorder(BorderFactory.createEmptyBorder(0,0,5,0));
         fileSendButton.setToolTipText("Share a file");
 
 
@@ -296,30 +312,13 @@ public class ChatRoom extends JPanel {
         inputFieldPanel.add(chatTextField, BorderLayout.CENTER);
         inputFieldPanel.add(inputControlsPanel, BorderLayout.EAST);
 
-        // Holder for input area with custom rounded background
         JPanel inputPanelHolder = new JPanel(new BorderLayout(0,5)){
-            private final int cornerRadius = 20;
-            private final Color fillColor = new Color(70, 70, 70); // Solid color for input field bg
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g.create();
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2d.setColor(fillColor);
-                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
-                g2d.dispose();
-            }
-        };
-        inputPanelHolder.setOpaque(false);
-        inputPanelHolder.setBorder(BorderFactory.createEmptyBorder(8,8,8,8)); // Padding around input elements
-        inputPanelHolder.add(inputFieldPanel);
-
-
-        // Chat area (list + input) with custom background
-        JPanel chatAreaPanel = new JPanel(new BorderLayout(0, 8)) { // Increased gap
-            private final int cornerRadius = 25;
-            private final float fillAlpha = 120 / 255.0f;
-            private final Color fillColor = new Color(60, 60, 60); // Main chat area background
+            private int cornerRadius = 25;
+            private float fillAlpha = 1f;
+            private Color fillColor = new Color(70, 70, 70);
+            private float borderAlpha = 1f;
+            private Color borderColor = new Color(150,150,150);
+            private int borderThickness = 1;
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
@@ -328,6 +327,74 @@ public class ChatRoom extends JPanel {
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
                 g2d.setColor(fillColor);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+                if (borderThickness > 0) {
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+                    g2d.setColor(borderColor);
+                    g2d.setStroke(new BasicStroke(borderThickness));
+                    int B = borderThickness;
+                    g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+                }
+                g2d.dispose();
+            }
+        };
+        inputPanelHolder.setOpaque(false);
+        inputPanelHolder.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
+        inputPanelHolder.add(inputFieldPanel);
+
+        // Holder for input area with custom rounded background
+        // JPanel inputPanelHolder = new JPanel(new BorderLayout(0,5)){
+        //     private int cornerRadius = 25;
+        //     private float fillAlpha = 120 / 255.0f;
+        //     private Color fillColor = new Color(102, 102, 102);
+        //     private float borderAlpha = 200 / 255.0f;
+        //     private Color borderColor = new Color(150, 150, 150);
+        //     private int borderThickness = 1;
+        //     @Override
+        //     protected void paintComponent(Graphics g) {
+        //         super.paintComponent(g);
+        //         Graphics2D g2d = (Graphics2D) g.create();
+        //         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        //         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
+        //         g2d.setColor(fillColor);
+        //         g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+        //         if (borderThickness > 0) {
+        //             g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+        //             g2d.setColor(borderColor);
+        //             g2d.setStroke(new BasicStroke(borderThickness));
+        //             int B = borderThickness;
+        //             g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+        //         }
+        //         g2d.dispose();
+        //     }
+        // };
+        // inputPanelHolder.setOpaque(false);
+        // inputPanelHolder.setBorder(BorderFactory.createEmptyBorder(8,8,8,8)); // Padding around input elements
+        // inputPanelHolder.add(inputFieldPanel);
+
+
+        JPanel chatAreaPanel = new JPanel(new BorderLayout(0, 8)) { // Increased gap
+            private int cornerRadius = 25;
+            private float fillAlpha = 120 / 255.0f;
+            private Color fillColor = new Color(102, 102, 102);
+            private float borderAlpha = 200 / 255.0f;
+            private Color borderColor = new Color(150, 150, 150);
+            private int borderThickness = 1;
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
+                g2d.setColor(fillColor);
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+                if (borderThickness > 0) {
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+                    g2d.setColor(borderColor);
+                    g2d.setStroke(new BasicStroke(borderThickness));
+                    int B = borderThickness;
+                    g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+                }
                 g2d.dispose();
             }
         };
@@ -342,9 +409,9 @@ public class ChatRoom extends JPanel {
     }
 
     private JPanel createRightPanel() {
-        JPanel rightPanel = new JPanel(new BorderLayout(0, 10));
+        JPanel rightPanel = new JPanel(new BorderLayout(0, 5));
         rightPanel.setOpaque(false);
-        rightPanel.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 0)); // Padding on left for divider
+        rightPanel.setBorder(BorderFactory.createEmptyBorder(0, 5, 8, 0)); // Padding on left for divider
 
         // --- Top Icons Panel (Gear, Download) ---
         GearButtonLabel = createLogoLabel(GEAR_LOGO_IMAGE_PATH, 28);
@@ -352,10 +419,15 @@ public class ChatRoom extends JPanel {
         DownloadButtonLabel = createLogoLabel(DOWNLOAD_LOGO_IMAGE_PATH, 28);
         DownloadButtonLabel.setToolTipText("Download Chat History");
 
-        JPanel topIconsPanel = new JPanel(new GridBagLayout()){
-            private final int cornerRadius = 20;
-            private final float fillAlpha = 120 / 255.0f;
-            private final Color fillColor = new Color(80, 80, 80);
+        // JPanel topIconsPanel = new JPanel(new GridBagLayout()){
+        JPanel leftTopButtonPanel = new JPanel(new GridBagLayout()){
+            private int cornerRadius = 25;
+            private float fillAlpha = 120 / 255.0f;
+            private Color fillColor = new Color(102, 102, 102);
+            private float borderAlpha = 200 / 255.0f;
+            private Color borderColor = new Color(150, 150, 150);
+            private int borderThickness = 1;
+
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
@@ -364,17 +436,40 @@ public class ChatRoom extends JPanel {
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
                 g2d.setColor(fillColor);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+                if (borderThickness > 0) {
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+                    g2d.setColor(borderColor);
+                    g2d.setStroke(new BasicStroke(borderThickness));
+                    int B = borderThickness;
+                    g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+                }
                 g2d.dispose();
             }
         };
-        topIconsPanel.setOpaque(false);
-        topIconsPanel.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
+        leftTopButtonPanel.setOpaque(false);
+        leftTopButtonPanel.setBorder(BorderFactory.createEmptyBorder(4,0,4,0));
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(2, 10, 2, 10);
-        if (DownloadButtonLabel != null) topIconsPanel.add(DownloadButtonLabel, gbc);
-        gbc.gridx = 1; gbc.weightx = 1.0; topIconsPanel.add(Box.createHorizontalGlue(), gbc); // Spacer
-        gbc.gridx = 2; gbc.weightx = 0.0;
-        if (GearButtonLabel != null) topIconsPanel.add(GearButtonLabel, gbc);
+
+        gbc.gridx = 0; 
+        gbc.gridy = 0; 
+        gbc.anchor = GridBagConstraints.WEST; 
+        gbc.weightx = 0.0; 
+        gbc.fill = GridBagConstraints.NONE; 
+        gbc.insets = new Insets(5, 30, 5, 5);
+
+        if (DownloadButtonLabel != null) leftTopButtonPanel.add(DownloadButtonLabel, gbc);
+        gbc.gridx = 1; 
+        gbc.weightx = 1.0; 
+        gbc.fill = GridBagConstraints.HORIZONTAL; 
+        gbc.insets = new Insets(5, 0, 5, 0);
+
+        leftTopButtonPanel.add(Box.createHorizontalGlue(), gbc);
+        gbc.gridx = 2; 
+        gbc.anchor = GridBagConstraints.EAST; 
+        gbc.weightx = 0.0; 
+        gbc.fill = GridBagConstraints.NONE; 
+        gbc.insets = new Insets(5, 5, 5, 30);
+        if (GearButtonLabel != null) leftTopButtonPanel.add(GearButtonLabel, gbc);
 
 
         // --- User List Panel ---
@@ -399,9 +494,13 @@ public class ChatRoom extends JPanel {
 
         // User list panel holder (with custom background)
         JPanel userDisplayPanelHolder = new JPanel(new BorderLayout()){
-            private final int cornerRadius = 25;
-            private final float fillAlpha = 120 / 255.0f;
-            private final Color fillColor = new Color(80, 80, 80);
+            private int cornerRadius = 25;
+            private float fillAlpha = 120 / 255.0f;
+            private Color fillColor = new Color(102, 102, 102);
+            private float borderAlpha = 200 / 255.0f;
+            private Color borderColor = new Color(150, 150, 150);
+            private int borderThickness = 1;
+
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
@@ -410,6 +509,13 @@ public class ChatRoom extends JPanel {
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
                 g2d.setColor(fillColor);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+                if (borderThickness > 0) {
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+                    g2d.setColor(borderColor);
+                    g2d.setStroke(new BasicStroke(borderThickness));
+                    int B = borderThickness;
+                    g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+                }
                 g2d.dispose();
             }
         };
@@ -420,9 +526,13 @@ public class ChatRoom extends JPanel {
 
         // --- Invitation Panel ---
         invitationPanel = new JPanel(new BorderLayout(0,8)){ // Increased gap
-            private final int cornerRadius = 20;
-            private final float fillAlpha = 150 / 255.0f; // Slightly more opaque
-            private final Color fillColor = new Color(90, 90, 90); // Darker for emphasis
+            private int cornerRadius = 25;
+            private float fillAlpha = 120 / 255.0f;
+            private Color fillColor = new Color(102, 102, 102);
+            private float borderAlpha = 200 / 255.0f;
+            private Color borderColor = new Color(150, 150, 150);
+            private int borderThickness = 1;
+
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
@@ -431,6 +541,13 @@ public class ChatRoom extends JPanel {
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
                 g2d.setColor(fillColor);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
+                if (borderThickness > 0) {
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+                    g2d.setColor(borderColor);
+                    g2d.setStroke(new BasicStroke(borderThickness));
+                    int B = borderThickness;
+                    g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+                }
                 g2d.dispose();
             }
         };
@@ -463,18 +580,13 @@ public class ChatRoom extends JPanel {
 
 
         // --- Action Buttons Panel (Leave, Download) ---
-        leaveRoomButton = new CustomButton("Leave App", 120, 33, new Color(230, 90, 90));
+        leaveRoomButton = new CustomButton("Leave Room", 120, 40, new Color(255, 77, 77));
         leaveRoomButton.setForeground(Color.WHITE);
         leaveRoomButton.setFont(new Font("SansSerif", Font.BOLD, 13));
-
-        downloadChatButton = new CustomButton("DL Chat", 100, 33, new Color(80, 150, 220)); // Shorter text
-        downloadChatButton.setForeground(Color.WHITE);
-        downloadChatButton.setFont(new Font("SansSerif", Font.BOLD, 13));
-
-        JPanel actionButtonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-        actionButtonsPanel.setOpaque(false);
-        actionButtonsPanel.add(downloadChatButton);
-        actionButtonsPanel.add(leaveRoomButton);
+        JPanel leaveButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 5));
+        leaveButtonPanel.setOpaque(false);
+        leaveButtonPanel.add(leaveRoomButton);
+        
 
         // Container for user list and invitation panel
         JPanel centerContentPanel = new JPanel(new BorderLayout(0, 10));
@@ -482,9 +594,9 @@ public class ChatRoom extends JPanel {
         centerContentPanel.add(userDisplayPanelHolder, BorderLayout.CENTER);
         centerContentPanel.add(invitationPanel, BorderLayout.SOUTH);
 
-        rightPanel.add(topIconsPanel, BorderLayout.NORTH);
+        rightPanel.add(leftTopButtonPanel, BorderLayout.NORTH);
         rightPanel.add(centerContentPanel, BorderLayout.CENTER);
-        rightPanel.add(actionButtonsPanel, BorderLayout.SOUTH);
+        rightPanel.add(leaveButtonPanel, BorderLayout.SOUTH);
         return rightPanel;
     }
 
@@ -652,7 +764,7 @@ public class ChatRoom extends JPanel {
         chatTextField.addActionListener(sendAction);
 
         leaveRoomButton.addActionListener(e -> { if (chatController != null) chatController.leaveRoom(); });
-        downloadChatButton.addActionListener(e -> downloadChatHistory());
+        // downloadChatButton.addActionListener(e -> downloadChatHistory());
 
         if (DownloadButtonLabel != null) {
             DownloadButtonLabel.addMouseListener(new MouseAdapter() {
@@ -739,109 +851,151 @@ public class ChatRoom extends JPanel {
     }
 
     private void addRoomTabInternal(String roomName) {
-        if (roomName == null || roomButtons.containsKey(roomName)) return;
+        System.out.println("[ChatRoom DEBUG] addRoomTabInternal called for: " + roomName); // DEBUG
+        if (roomName == null || roomName.trim().isEmpty()) { // Check for empty room name
+            System.out.println("[ChatRoom DEBUG] Room name is null or empty. Tab not added.");
+            return;
+        }
+        if (roomButtons.containsKey(roomName)) {
+            System.out.println("[ChatRoom DEBUG] Tab for " + roomName + " already exists.");
+            return;
+        }
 
-        Random random = new Random(roomName.hashCode()); // Consistent color per room name
+        Random random = new Random(roomName.hashCode());
         CustomButton tabButton = new CustomButton(roomName, 100, 28,
                 new Color(100 + random.nextInt(100), 100 + random.nextInt(100), 100 + random.nextInt(100)));
         tabButton.setForeground(Color.WHITE);
         tabButton.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        final String rn = roomName; // Effectively final for lambda
         tabButton.addActionListener(e -> {
-            if (chatController != null) chatController.requestRoomSwitch(roomName);
+            System.out.println("[ChatRoom DEBUG] Tab clicked: " + rn); // DEBUG
+            if (chatController != null) chatController.requestRoomSwitch(rn);
         });
         roomButtons.put(roomName, tabButton);
+        System.out.println("[ChatRoom DEBUG] Created button for " + roomName + ". Text: '" + tabButton.getText() + "'"); // DEBUG
 
         int addButtonIndex = -1;
-        for (int i = 0; i < roomTabPanel.getComponentCount(); i++) {
-            if (roomTabPanel.getComponent(i) == addNewRoomButton) {
-                addButtonIndex = i;
-                break;
+        if (roomTabPanel != null && addNewRoomButton != null) { // Ensure panel and button exist
+            for (int i = 0; i < roomTabPanel.getComponentCount(); i++) {
+                if (roomTabPanel.getComponent(i) == addNewRoomButton) {
+                    addButtonIndex = i;
+                    break;
+                }
             }
+            System.out.println("[ChatRoom DEBUG] Add new room button index: " + addButtonIndex); // DEBUG
+            roomTabPanel.add(tabButton, (addButtonIndex != -1) ? addButtonIndex : roomTabPanel.getComponentCount());
+            System.out.println("[ChatRoom DEBUG] Added tabButton to roomTabPanel. Component count: " + roomTabPanel.getComponentCount()); // DEBUG
+            roomTabPanel.revalidate();
+            roomTabPanel.repaint();
+        } else {
+            System.err.println("[ChatRoom DEBUG] roomTabPanel or addNewRoomButton is null in addRoomTabInternal!");
         }
-        roomTabPanel.add(tabButton, (addButtonIndex != -1) ? addButtonIndex : roomTabPanel.getComponentCount());
-        roomTabPanel.revalidate();
-        roomTabPanel.repaint();
     }
 
     public void addRoomTab(String roomName) {
+        System.out.println("[ChatRoom|addRoomTab] Public API called for room: '" + roomName + "'");
+        // This is the public entry point, so it's good practice to ensure UI work happens on EDT.
         SwingUtilities.invokeLater(() -> addRoomTabInternal(roomName));
     }
 
     // Update this method to accept the list of users for the new room from the controller
+    // In your NEW ChatRoom.java's updateUIForRoomSwitch method
     public void updateUIForRoomSwitch(String newActiveRoom, List<String> usersInNewRoom) {
-        SwingUtilities.invokeLater(() -> {
-            this.activeRoomName = newActiveRoom;
-            setActiveRoomName(newActiveRoom); // Updates title border and potentially other labels
+    // This method now assumes it's already on the EDT
+        System.out.println("[ChatRoom|updateUIForRoomSwitch] Called for room: '" + newActiveRoom + "'. Current activeRoomName (before set): '" + this.activeRoomName + "'");
+        this.activeRoomName = newActiveRoom;
+        setChatScrollPaneTitle(newActiveRoom);
 
-            // Clear and reload chat history
-            this.chatListModel.clear();
-            if (chatController != null && newActiveRoom != null) {
-                List<ChatMessage> history = chatController.getChatHistory(newActiveRoom);
-                if (history != null) {
-                    for (ChatMessage msg : history) this.chatListModel.addElement(msg);
-                }
-                if (!chatListModel.isEmpty()) {
-                    chatList.ensureIndexIsVisible(chatListModel.getSize() - 1);
-                }
+        this.chatListModel.clear();
+        if (chatController != null && newActiveRoom != null) {
+            List<ChatMessage> history = chatController.getChatHistory(newActiveRoom);
+            if (history != null) {
+                for (ChatMessage msg : history) this.chatListModel.addElement(msg);
             }
-
-            // Update internal user set and then call frontend's updateUserList
-            this.onlineUsers.clear();
-            if (usersInNewRoom != null) {
-                this.onlineUsers.addAll(usersInNewRoom);
+            if (!chatListModel.isEmpty()) {
+                chatList.ensureIndexIsVisible(chatListModel.getSize() - 1);
             }
-            // Ensure current user is in the set if not provided by controller for some reason (should be)
-            if (this.currentUserName != null && !this.onlineUsers.contains(this.currentUserName)) {
-                this.onlineUsers.add(this.currentUserName);
-            }
-            // Call frontend's method to refresh UI for user list
-            // Pass the list from controller; updateUserList knows to handle currentUserName for "(You)"
-            updateUserList(usersInNewRoom != null ? usersInNewRoom : new ArrayList<>());
+        }
+        updateUserList(usersInNewRoom != null ? usersInNewRoom : new ArrayList<>());
 
-
-            // Update tab button highlighting
-            roomButtons.forEach((name, button) -> {
-                if (button != null) {
-                    button.setBorder(name.equals(newActiveRoom) ?
-                            BorderFactory.createLineBorder(Color.CYAN, 2) :
-                            UIManager.getBorder("Button.border"));
+        System.out.println("[ChatRoom|updateUIForRoomSwitch] Updating tab highlights. Target active: '" + newActiveRoom + "'. Buttons in map: " + roomButtons.keySet());
+        final String finalActiveRoom = newActiveRoom;
+        roomButtons.forEach((name, button) -> {
+            if (button != null) {
+                boolean isActive = Objects.equals(name, finalActiveRoom);
+                System.out.println("[ChatRoom|updateUIForRoomSwitch]  Processing tab: '" + name + "'. Is active? " + isActive + ". Button text: '" + button.getText() + "'");
+                if (isActive) {
+                    button.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
+                    System.out.println("[ChatRoom|updateUIForRoomSwitch]   Applied ACTIVE border to '" + name + "'");
+                } else {
+                    Border defaultBorder = UIManager.getBorder("Button.border");
+                    button.setBorder(defaultBorder != null ? defaultBorder : BorderFactory.createEmptyBorder(2, 2, 2, 2));
+                    System.out.println("[ChatRoom|updateUIForRoomSwitch]   Applied " + (defaultBorder != null ? "default L&F" : "fallback empty") + " border to '" + name + "'");
                 }
-            });
+            } else {
+                System.err.println("[ChatRoom|updateUIForRoomSwitch] Null button found in roomButtons map for key: " + name);
+            }
         });
+
+        if (roomTabPanel != null) {
+            roomTabPanel.revalidate();
+            roomTabPanel.repaint();
+        }
+        if (roomTabScrollPanel != null) {
+            roomTabScrollPanel.revalidate();
+            roomTabScrollPanel.repaint();
+            System.out.println("[ChatRoom|updateUIForRoomSwitch] Revalidated roomTabPanel & roomTabScrollPanel.");
+        }
+        System.out.println("[ChatRoom|updateUIForRoomSwitch] Finished for room: '" + newActiveRoom + "'.");
     }
 
-    public void reInitializeForNewSession(String username, String roomName, java.util.List<String> usersInRoom) {
-        SwingUtilities.invokeLater(() -> {
-            System.out.println("[ChatRoom] Re-initializing for user: " + username + ", room: " + roomName);
+    public void reInitializeForNewSession(String username, String sessionInitialRoomName, java.util.List<String> usersInRoom) {
+        SwingUtilities.invokeLater(() -> { // Outer invokeLater ensures all of this block is on EDT
+            System.out.println("[ChatRoom|reInitialize] Called. User: '" + username + "', Session Initial Room: '" + sessionInitialRoomName + "'");
             this.currentUserName = username != null ? username : "UnknownUser";
-            // activeRoomName is set by updateUIForRoomSwitch
 
-            clearAllRoomTabs(); // Clear old tabs
+            System.out.println("[ChatRoom|reInitialize] Clearing all room tabs. Current buttons before clear: " + roomButtons.keySet());
+            clearAllRoomTabs(); // Now calls the direct version
+            System.out.println("[ChatRoom|reInitialize] Room tabs cleared. Current buttons after clear: " + roomButtons.keySet());
 
-            if (roomName != null /*&& !roomName.equals("DefaultRoom")*/) { // Assuming "DefaultRoom" might not have a tab
-                addRoomTabInternal(roomName); // Add current room tab first
+            if (sessionInitialRoomName != null && !sessionInitialRoomName.trim().isEmpty()) {
+                System.out.println("[ChatRoom|reInitialize] Session Initial Room ('" + sessionInitialRoomName + "') is valid. Adding tab for it.");
+                addRoomTabInternal(sessionInitialRoomName); // Calls the direct version
+            } else {
+                System.out.println("[ChatRoom|reInitialize] Session Initial Room is null or empty. No initial tab will be added by reInitialize.");
             }
+            // At this point, roomButtons map should correctly have sessionInitialRoomName if it was valid.
 
-            // This will handle setting activeRoomName, titles, history, and user list
-            updateUIForRoomSwitch(roomName, usersInRoom);
+            System.out.println("[ChatRoom|reInitialize] Calling updateUIForRoomSwitch for Session Initial Room: '" + sessionInitialRoomName + "'");
+            updateUIForRoomSwitch(sessionInitialRoomName, usersInRoom); // Now calls the direct version
 
-            // If other tabs are known (e.g., from a persistent list of joined rooms), add them back
-            // For now, only the current active room's tab is restored by this re-init.
-
-            mainContentPanel.revalidate(); // Revalidate main layout
-            mainContentPanel.repaint();
+            System.out.println("[ChatRoom|reInitialize] After updateUIForRoomSwitch. Current activeRoomName: '" + this.activeRoomName + "'. Buttons in map: " + roomButtons.keySet());
+            if (sessionInitialRoomName != null && roomButtons.containsKey(sessionInitialRoomName)) {
+                CustomButton btn = roomButtons.get(sessionInitialRoomName);
+                if (btn != null) {
+                    System.out.println("[ChatRoom|reInitialize] Initial room tab ('" + btn.getText() + "') border: " + (btn.getBorder() != null ? btn.getBorder().getClass().getSimpleName() : "null") +
+                                    ", Visible: " + btn.isVisible() + ", Parent: " + (btn.getParent() != null ? btn.getParent().getClass().getSimpleName() : "null"));
+                }
+            } else if (sessionInitialRoomName != null) {
+                System.err.println("[ChatRoom|reInitialize] CRITICAL: Tab for session initial room '" + sessionInitialRoomName + "' NOT FOUND in roomButtons map after all setup!");
+            }
+            System.out.println("[ChatRoom|reInitialize] Finished.");
         });
     }
 
     public void clearAllRoomTabs() {
-        SwingUtilities.invokeLater(() -> {
-            if (roomTabPanel == null || roomButtons == null || addNewRoomButton == null) return;
-            roomTabPanel.removeAll();
-            roomButtons.clear();
-            roomTabPanel.add(addNewRoomButton); // Re-add the "+" button
-            roomTabPanel.revalidate();
-            roomTabPanel.repaint();
-        });
+        // This method now assumes it's already on the EDT
+        System.out.println("[ChatRoom|clearAllRoomTabs] Called.");
+        if (roomTabPanel == null || roomButtons == null || addNewRoomButton == null) {
+            System.err.println("[ChatRoom|clearAllRoomTabs] Cannot clear: roomTabPanel, roomButtons, or addNewRoomButton is null.");
+            return;
+        }
+        roomTabPanel.removeAll();
+        roomButtons.clear(); // Clears the map directly
+        roomTabPanel.add(addNewRoomButton);
+        System.out.println("[ChatRoom|clearAllRoomTabs] Cleared. Component count in roomTabPanel: " + roomTabPanel.getComponentCount());
+        roomTabPanel.revalidate();
+        roomTabPanel.repaint();
     }
 
 

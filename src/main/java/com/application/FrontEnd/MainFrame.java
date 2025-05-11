@@ -220,6 +220,10 @@ public class MainFrame extends JFrame {
         }
     }
 
+    public void applyUserAvatar(String imagePath) {
+        
+    }
+
     private static void loadCustomFonts() {
         try {
             InputStream regularStream = MainFrame.class.getResourceAsStream("/com/application/FrontEnd/fonts/Sansation_Regular.ttf");

@@ -55,9 +55,12 @@ public class SettingRoom extends JPanel {
     private MainFrame mainFrame;
     private JPanel currentlySelectedChatBgPreview = null;
 
+    private String currentImage = null;
 
     public SettingRoom(MainFrame mainFrame) {
         this.mainFrame = mainFrame;
+
+        this.currentImage = OVERALL_BACKGROUND_IMAGE_PATH;
 
         setLayout(new BorderLayout());
         setOpaque(false);
@@ -65,7 +68,7 @@ public class SettingRoom extends JPanel {
         layeredPane = new JLayeredPane();
         add(layeredPane, BorderLayout.CENTER);
 
-        overallBackgroundPanel = new BackgroundImagePanel(OVERALL_BACKGROUND_IMAGE_PATH);
+        overallBackgroundPanel = new BackgroundImagePanel(currentImage);
         layeredPane.add(overallBackgroundPanel, JLayeredPane.DEFAULT_LAYER);
 
         mainContentPanel = createMainContentPanel();
@@ -292,16 +295,16 @@ public class SettingRoom extends JPanel {
 
         String wavesPath = "/com/application/FrontEnd/images/BG_LoginPage.jpg"; // Define your paths
         String darkTechPath = "/com/application/FrontEnd/images/BG_PublicRooms.png";
-        Color oceanColor = new Color(60, 120, 180);
-        Color forestColor = new Color(50, 100, 50);
-        Color sunsetColor = new Color(200, 100, 50);
-
+        String darkBallPath = "/com/application/FrontEnd/images/BG_1.jpg";
+        String diskPath = "/com/application/FrontEnd/images/BG_2.jpg";
+        String darkCubePath = "/com/application/FrontEnd/images/BG_3.jpg";
+        
 
         backgroundGrid.add(createBackgroundPreviewPanel("Waves", wavesPath, wavesPath.equals(selectedChatBackgroundSource)));
         backgroundGrid.add(createBackgroundPreviewPanel("Dark Tech", darkTechPath, darkTechPath.equals(selectedChatBackgroundSource)));
-        backgroundGrid.add(createBackgroundPreviewPanel("Ocean", oceanColor, oceanColor.equals(selectedChatBackgroundSource)));
-        backgroundGrid.add(createBackgroundPreviewPanel("Forest", forestColor, forestColor.equals(selectedChatBackgroundSource)));
-        backgroundGrid.add(createBackgroundPreviewPanel("Sunset", sunsetColor, sunsetColor.equals(selectedChatBackgroundSource)));
+        backgroundGrid.add(createBackgroundPreviewPanel("Ball", darkBallPath, darkBallPath.equals(selectedChatBackgroundSource)));
+        backgroundGrid.add(createBackgroundPreviewPanel("Disk", diskPath, diskPath.equals(selectedChatBackgroundSource)));
+        backgroundGrid.add(createBackgroundPreviewPanel("Cube", darkCubePath, darkCubePath.equals(selectedChatBackgroundSource)));
         
         JScrollPane scrollPane = new JScrollPane(backgroundGrid);
         scrollPane.setOpaque(false);
@@ -374,23 +377,41 @@ public class SettingRoom extends JPanel {
         }
 
         previewPanel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                JPanel clickedPanel = (JPanel) e.getSource();
-                Object newBgSource = clickedPanel.getClientProperty("bgSource");
-                String newBgName = (String) clickedPanel.getClientProperty("bgName");
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            JPanel clickedPanel = (JPanel) e.getSource();
+            Object newBgSource = clickedPanel.getClientProperty("bgSource"); // This is for ChatRoom (String or Color)
+            String newBgName = (String) clickedPanel.getClientProperty("bgName");
 
-                System.out.println("[SettingRoom] Chat BG Preview '" + newBgName + "' clicked. Source: " + newBgSource);
+            System.out.println("[SettingRoom] Chat BG Preview '" + newBgName + "' clicked. Source for ChatRoom: " + newBgSource);
 
-                if (currentlySelectedChatBgPreview != null) {
-                    currentlySelectedChatBgPreview.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
-                }
-                clickedPanel.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
-                currentlySelectedChatBgPreview = clickedPanel;
-
-                selectedChatBackgroundSource = newBgSource; // Store String path or Color object
-                System.out.println("[SettingRoom] New selectedChatBackgroundSource: " + selectedChatBackgroundSource);
+            // Update visual selection for chat background previews
+            if (currentlySelectedChatBgPreview != null) {
+                currentlySelectedChatBgPreview.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
             }
+            clickedPanel.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
+            currentlySelectedChatBgPreview = clickedPanel;
+
+            selectedChatBackgroundSource = newBgSource; // This variable is for the ChatRoom
+            System.out.println("[SettingRoom] New selectedChatBackgroundSource (for ChatRoom): " + selectedChatBackgroundSource);
+
+            if (newBgSource instanceof String) {
+                String imagePathForSettingRoom = (String) newBgSource;
+                currentImage = imagePathForSettingRoom; // Update the SettingRoom's currentImage field
+
+                if (overallBackgroundPanel != null) {
+                    System.out.println("[SettingRoom] Applying new background to SettingRoom itself: " + imagePathForSettingRoom);
+                    overallBackgroundPanel.setImage(imagePathForSettingRoom); // Change SettingRoom's BG
+                } else {
+                    System.err.println("[SettingRoom] overallBackgroundPanel is null. Cannot change SettingRoom's own background.");
+                }
+            } else if (newBgSource instanceof Color) {
+                currentImage = null; // Or some default image path if SettingRoom shouldn't have solid color BGs
+                System.out.println("[SettingRoom] Color selected for ChatRoom. SettingRoom's 'currentImage' set to null.");
+                    if (overallBackgroundPanel != null) {
+                    }
+            }
+        }
         });
         return previewPanel;
     }
@@ -474,12 +495,138 @@ public class SettingRoom extends JPanel {
         } return button;
     }
 
-    // Renamed the inner class to avoid conflict if you had BackgroundImagePanel in ChatRoom too
+    
+
     private static class BackgroundImagePanel extends JPanel {
-        private Image backgroundImage; private String errorMessage = null; private String imagePathUsed;
-        public BackgroundImagePanel(String imagePath) { this.imagePathUsed = imagePath; try { URL imgUrl = getClass().getResource(imagePath); if (imgUrl != null) { this.backgroundImage = ImageIO.read(imgUrl); if (this.backgroundImage == null) throw new IOException("ImageIO returned null for " + imagePath); } else { throw new IOException("Resource not found: " + imagePath); } } catch (IOException e) { this.errorMessage = "Ex loading background ("+imagePath+"): " + e.getMessage(); System.err.println(errorMessage); this.backgroundImage = null; } setOpaque(true); }
-        @Override protected void paintComponent(Graphics g) { super.paintComponent(g); if (backgroundImage != null) { Graphics2D g2d = (Graphics2D) g.create(); int panelW = getWidth(); int panelH = getHeight(); if (panelW <=0 || panelH <= 0) { g2d.dispose(); return; } int imgW = backgroundImage.getWidth(this); int imgH = backgroundImage.getHeight(this); if(imgW <=0 || imgH <= 0) { g2d.dispose(); return; } double imgAspect = (double) imgW / imgH; double panelAspect = (double) panelW / panelH; int drawW, drawH, drawX, drawY; if (panelAspect > imgAspect) { drawW = panelW; drawH = (int)(panelW / imgAspect); drawX = 0; drawY = (panelH - drawH) / 2; } else { drawH = panelH; drawW = (int)(panelH * imgAspect); drawX = (panelW - drawW) / 2; drawY = 0; } g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR); g2d.drawImage(backgroundImage, drawX, drawY, drawW, drawH, this); g2d.dispose();
-            } else { g.setColor(new Color(25, 25, 25)); g.fillRect(0, 0, getWidth(), getHeight()); g.setColor(Color.YELLOW); g.setFont(new Font("SansSerif", Font.BOLD, 14)); FontMetrics fm = g.getFontMetrics(); String text = "BG Load Error: " + (errorMessage != null ? errorMessage : "Unknown") + " (Path: " + imagePathUsed + ")"; int msgWidth = fm.stringWidth(text); g.drawString(text, Math.max(5, (getWidth() - msgWidth) / 2), getHeight() / 2 + fm.getAscent() / 2); }
+        private Image backgroundImage;
+        private String errorMessage = null; // To store errors from loadImage
+        private String imagePathUsed;   // To display in error messages
+
+        public BackgroundImagePanel(String imagePath) {
+            this.imagePathUsed = imagePath; // Store the initial path
+            setImage(imagePath);          // Call the public setImage to load it
+            setOpaque(true);              // This panel should be opaque
+        }
+
+        // Public method to change the image of THIS panel
+        public void setImage(String newImagePath) {
+            System.out.println("[SettingRoom.BGPanel.setImage] Attempting to set new image to: " + newImagePath);
+            this.imagePathUsed = newImagePath; // Update the path being used
+            loadImage(newImagePath);         // Load the new image (this will set backgroundImage and errorMessage)
+            repaint();                       // Trigger a repaint of THIS panel
+        }
+
+        private void loadImage(String imagePath) {
+            if (imagePath == null || imagePath.trim().isEmpty()) {
+                this.errorMessage = "Image path is null or empty.";
+                this.backgroundImage = null;
+                System.err.println("[SettingRoom.BGPanel.loadImage] " + this.errorMessage);
+                return;
+            }
+            try {
+                URL imgUrl = SettingRoom.class.getResource(imagePath); // Use SettingRoom.class for static inner class context
+                if (imgUrl != null) {
+                    this.backgroundImage = ImageIO.read(imgUrl);
+                    if (this.backgroundImage == null) {
+                        throw new IOException("ImageIO.read returned null for path: " + imagePath + " (URL: " + imgUrl.toExternalForm() + ")");
+                    }
+                    this.errorMessage = null; // Successfully loaded, clear any previous error
+                    System.out.println("[SettingRoom.BGPanel.loadImage] Loaded image for self: " + imagePath);
+                } else {
+                    throw new IOException("Resource not found (URL was null) for path: " + imagePath + ". Check classpath and path string.");
+                }
+            } catch (IOException e) {
+                this.errorMessage = "IOException: " + e.getMessage(); // Store the specific error
+                System.err.println("[SettingRoom.BGPanel.loadImage] Error loading SettingRoom BG (" + imagePath + "): " + this.errorMessage);
+                this.backgroundImage = null; // Ensure image is null on error
+            } catch (Exception e) {
+                this.errorMessage = "Unexpected Exception: " + e.getMessage();
+                System.err.println("[SettingRoom.BGPanel.loadImage] Unexpected error loading SettingRoom BG (" + imagePath + "): " + this.errorMessage);
+                e.printStackTrace();
+                this.backgroundImage = null;
+            }
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g); // Crucial for opaque panels to clear their background
+
+            if (backgroundImage != null) {
+                // Your existing, correct image drawing logic
+                Graphics2D g2d = (Graphics2D) g.create();
+                int panelW = getWidth();
+                int panelH = getHeight();
+                if (panelW <= 0 || panelH <= 0) {
+                    g2d.dispose(); return;
+                }
+                int imgW = backgroundImage.getWidth(this);
+                int imgH = backgroundImage.getHeight(this);
+                if (imgW <= 0 || imgH <= 0) {
+                    g2d.dispose();
+                     // Optionally draw a small error directly on the image area if dimensions are bad
+                    g.setColor(Color.RED);
+                    g.drawString("Bad Img Dims", 5, 15);
+                    return;
+                }
+                double imgAspect = (double) imgW / imgH;
+                double panelAspect = (double) panelW / panelH;
+                int drawW, drawH, drawX, drawY;
+                if (panelAspect > imgAspect) {
+                    drawW = panelW; drawH = (int) (panelW / imgAspect); drawX = 0; drawY = (panelH - drawH) / 2;
+                } else {
+                    drawH = panelH; drawW = (int) (panelH * imgAspect); drawX = (panelW - drawW) / 2; drawY = 0;
+                }
+                g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g2d.drawImage(backgroundImage, drawX, drawY, drawW, drawH, this);
+                g2d.dispose();
+            } else {
+                // Improved Error Drawing
+                g.setColor(new Color(25, 25, 25)); // Default dark background for SettingRoom on error
+                g.fillRect(0, 0, getWidth(), getHeight());
+
+                g.setColor(Color.ORANGE); // More visible error text color
+                g.setFont(new Font("SansSerif", Font.BOLD, 14));
+                FontMetrics fm = g.getFontMetrics();
+
+                String errTitle = "SettingRoom Background Error:";
+                String errMsg = (this.errorMessage != null ? this.errorMessage : "Image not available or load failed.");
+                String pathMsg = "Attempted Path: " + (this.imagePathUsed != null ? this.imagePathUsed : "unknown");
+
+                int y = getHeight() / 2 - fm.getHeight(); // Adjusted for multi-line
+                g.drawString(errTitle, (getWidth() - fm.stringWidth(errTitle)) / 2, y);
+                y += fm.getHeight() + 2;
+                // Simple wrap for error message
+                for(String line : wordWrap(errMsg, fm, getWidth()-20)) {
+                    g.drawString(line, (getWidth() - fm.stringWidth(line)) / 2, y);
+                    y+=fm.getHeight();
+                }
+                y += 2;
+                g.drawString(pathMsg, (getWidth() - fm.stringWidth(pathMsg)) / 2, y);
+            }
+        }
+
+        // Helper for word wrap (add this if not already present or use a library)
+        private java.util.List<String> wordWrap(String text, FontMetrics fm, int maxWidth) {
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            if (text == null || text.isEmpty()) {
+                lines.add(""); return lines;
+            }
+            String[] words = text.split(" ");
+            StringBuilder currentLine = new StringBuilder();
+            for (String word : words) {
+                if (fm.stringWidth(currentLine.toString() + word) < maxWidth || currentLine.length() == 0) {
+                    if (currentLine.length() > 0) currentLine.append(" ");
+                    currentLine.append(word);
+                } else {
+                    lines.add(currentLine.toString());
+                    currentLine = new StringBuilder(word);
+                }
+            }
+            if (currentLine.length() > 0) {
+                lines.add(currentLine.toString());
+            }
+            return lines;
         }
     }
+
 }
