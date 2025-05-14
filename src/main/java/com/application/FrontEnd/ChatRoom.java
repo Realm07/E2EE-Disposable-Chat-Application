@@ -197,6 +197,14 @@ public class ChatRoom extends JPanel {
         mainContentPanel.add(splitPane, BorderLayout.CENTER);
     }
 
+    public void refreshChatMessages() {
+        SwingUtilities.invokeLater(() -> { // Ensure UI updates happen on the EDT
+            if (chatList != null) {
+                chatList.repaint(); // This tells the JList to redraw all its items
+            }
+        });
+    }
+
     private JPanel createLeftPanel() {
         JPanel leftPanel = new JPanel(new BorderLayout(0, 5));
         leftPanel.setOpaque(false);
@@ -254,7 +262,7 @@ public class ChatRoom extends JPanel {
 
 
         // --- Chat List Area ---
-        chatList.setCellRenderer(new MessageCellRenderer());
+        chatList.setCellRenderer(new MessageCellRenderer(this.mainFrame));
         chatList.setBackground(new Color(60, 60, 60, 0)); // Transparent background for list
         chatList.setOpaque(false); // List itself is transparent to see panel bg
         chatList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -411,7 +419,7 @@ public class ChatRoom extends JPanel {
     private JPanel createRightPanel() {
         JPanel rightPanel = new JPanel(new BorderLayout(0, 5));
         rightPanel.setOpaque(false);
-        rightPanel.setBorder(BorderFactory.createEmptyBorder(0, 5, 8, 0)); // Padding on left for divider
+        rightPanel.setBorder(BorderFactory.createEmptyBorder(0, 5, 7, 0)); // Padding on left for divider
 
         // --- Top Icons Panel (Gear, Download) ---
         GearButtonLabel = createLogoLabel(GEAR_LOGO_IMAGE_PATH, 28);
@@ -447,7 +455,7 @@ public class ChatRoom extends JPanel {
             }
         };
         leftTopButtonPanel.setOpaque(false);
-        leftTopButtonPanel.setBorder(BorderFactory.createEmptyBorder(4,0,4,0));
+        leftTopButtonPanel.setBorder(BorderFactory.createEmptyBorder(4,0,9,0));
         GridBagConstraints gbc = new GridBagConstraints();
 
         gbc.gridx = 0; 
