@@ -26,8 +26,8 @@ import com.application.FrontEnd.components.CustomButton;
 
 public class SettingRoom extends JPanel {
 
-    private JCheckBox saveUsernameCheckBox;
-    private JCheckBox trustLinksCheckBox;
+    // private JCheckBox saveUsernameCheckBox;
+    // private JCheckBox trustLinksCheckBox;
     private JButton backButton;
     private String selectedAvatarPath = null;
     private JButton setDefaultButton;
@@ -125,8 +125,8 @@ public class SettingRoom extends JPanel {
         itemPanel.add(label, BorderLayout.CENTER);
         itemPanel.add(checkBox, BorderLayout.EAST);
 
-        if ("Save Username for Later".equals(labelText)) saveUsernameCheckBox = checkBox;
-        else if ("Always trust download links".equals(labelText)) trustLinksCheckBox = checkBox;
+        // if ("Save Username for Later".equals(labelText)) saveUsernameCheckBox = checkBox;
+        // else if ("Always trust download links".equals(labelText)) trustLinksCheckBox = checkBox;
         return itemPanel;
     }
 
@@ -479,32 +479,32 @@ public class SettingRoom extends JPanel {
         return previewPanel;
     }
 
-    private void refreshAvatarSelectionDisplay() {
-        if (avatarGrid == null || mainFrame == null) {
-            return;
-        }
-        String currentAvatarPreference = mainFrame.getSelectedUserAvatarPathForRenderer();
-        this.selectedAvatarPath = currentAvatarPreference; // Sync SettingRoom's internal state
+    // private void refreshAvatarSelectionDisplay() {
+    //     if (avatarGrid == null || mainFrame == null) {
+    //         return;
+    //     }
+    //     String currentAvatarPreference = mainFrame.getSelectedUserAvatarPathForRenderer();
+    //     this.selectedAvatarPath = currentAvatarPreference; // Sync SettingRoom's internal state
 
-        for (Component comp : avatarGrid.getComponents()) {
-            if (comp instanceof JLabel) {
-                JLabel avatarLabel = (JLabel) comp;
-                String labelPath = (String) avatarLabel.getClientProperty("imagePath");
-                Object noDefBorderProp = avatarLabel.getClientProperty("noDefaultBorder");
-                boolean noDefBorder = (noDefBorderProp instanceof Boolean) && (Boolean)noDefBorderProp;
+    //     for (Component comp : avatarGrid.getComponents()) {
+    //         if (comp instanceof JLabel) {
+    //             JLabel avatarLabel = (JLabel) comp;
+    //             String labelPath = (String) avatarLabel.getClientProperty("imagePath");
+    //             Object noDefBorderProp = avatarLabel.getClientProperty("noDefaultBorder");
+    //             boolean noDefBorder = (noDefBorderProp instanceof Boolean) && (Boolean)noDefBorderProp;
 
-                if (labelPath != null && labelPath.equals(currentAvatarPreference)) {
-                    avatarLabel.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
-                } else {
-                    if (noDefBorder) {
-                        avatarLabel.setBorder(BorderFactory.createEmptyBorder(1,1,1,1));
-                    } else {
-                        avatarLabel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
-                    }
-                }
-            }
-        }
-    }
+    //             if (labelPath != null && labelPath.equals(currentAvatarPreference)) {
+    //                 avatarLabel.setBorder(BorderFactory.createLineBorder(Color.CYAN, 2));
+    //             } else {
+    //                 if (noDefBorder) {
+    //                     avatarLabel.setBorder(BorderFactory.createEmptyBorder(1,1,1,1));
+    //                 } else {
+    //                     avatarLabel.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     private JLabel createGenericImageLabel(String path, int targetWidth, int targetHeight) {
         JLabel label = new JLabel();
@@ -541,17 +541,17 @@ public class SettingRoom extends JPanel {
         return label;
     }
 
-    private void saveSettings() {
-        // ... (This method can remain for other settings) ...
-        boolean saveUser = false; if(saveUsernameCheckBox!=null) saveUser = saveUsernameCheckBox.isSelected();
-        boolean trustLinks = false; if(trustLinksCheckBox!=null) trustLinks = trustLinksCheckBox.isSelected();
-        System.out.println("Saving Settings:");
-        System.out.println("  Save Username: " + saveUser);
-        System.out.println("  Trust Links: " + trustLinks);
-        System.out.println("  Avatar: " + selectedAvatarPath);
-        System.out.println("  Chat Background Source: " + selectedChatBackgroundSource); // Log the Object
-        JOptionPane.showMessageDialog(this, "Settings applied (simulation).", "Settings Update", JOptionPane.INFORMATION_MESSAGE);
-    }
+    // private void saveSettings() {
+    //     // ... (This method can remain for other settings) ...
+    //     boolean saveUser = false; if(saveUsernameCheckBox!=null) saveUser = saveUsernameCheckBox.isSelected();
+    //     boolean trustLinks = false; if(trustLinksCheckBox!=null) trustLinks = trustLinksCheckBox.isSelected();
+    //     System.out.println("Saving Settings:");
+    //     System.out.println("  Save Username: " + saveUser);
+    //     System.out.println("  Trust Links: " + trustLinks);
+    //     System.out.println("  Avatar: " + selectedAvatarPath);
+    //     System.out.println("  Chat Background Source: " + selectedChatBackgroundSource); // Log the Object
+    //     JOptionPane.showMessageDialog(this, "Settings applied (simulation).", "Settings Update", JOptionPane.INFORMATION_MESSAGE);
+    // }
 
     private void resizeAndLayoutLayeredComponents() {
         // ... (This method can remain as is) ...

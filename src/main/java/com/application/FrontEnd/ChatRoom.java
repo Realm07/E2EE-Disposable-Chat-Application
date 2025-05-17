@@ -5,7 +5,6 @@ import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -49,7 +48,6 @@ import com.application.Backend.ChatController;
 // Assuming MessageData class/interface exists for file sharing offers
 import com.application.Backend.MessageData; // Placeholder, ensure this exists
 import com.application.FrontEnd.components.CustomButton;
-import com.application.FrontEnd.components.CustomLabel;
 import com.application.FrontEnd.components.CustomTextField;
 import com.application.FrontEnd.components.MessageCellRenderer;
 import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage;
@@ -88,7 +86,7 @@ public class ChatRoom extends JPanel {
     // --- Action Buttons from Backend (merged or adapted) ---
     private CustomButton leaveRoomButton; // Retained, common action
     // downloadChatButton (CustomButton) from backend, can coexist with DownloadButtonLabel (icon) for now
-    private CustomButton downloadChatButton;
+   
 
     // --- References & State ---
     private MainFrame mainFrame;
@@ -228,9 +226,9 @@ public class ChatRoom extends JPanel {
             private int cornerRadius = 25;
             private float fillAlpha = 120 / 255.0f;
             private Color fillColor = new Color(102, 102, 102);
-            private float borderAlpha = 200 / 255.0f;
-            private Color borderColor = new Color(150, 150, 150);
-            private int borderThickness = 1;
+            // private float borderAlpha = 200 / 255.0f;
+            // private Color borderColor = new Color(150, 150, 150);
+            // private int borderThickness = 1;
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
@@ -239,13 +237,13 @@ public class ChatRoom extends JPanel {
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
                 g2d.setColor(fillColor);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
-                if (borderThickness > 0) {
-                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
-                    g2d.setColor(borderColor);
-                    g2d.setStroke(new BasicStroke(borderThickness));
-                    int B = borderThickness;
-                    g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
-                }
+                // if (borderThickness > 0) {
+                //     g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+                //     g2d.setColor(borderColor);
+                //     g2d.setStroke(new BasicStroke(borderThickness));
+                //     int B = borderThickness;
+                //     g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+                // }
                 g2d.dispose();
             }
         };
@@ -384,9 +382,9 @@ public class ChatRoom extends JPanel {
             private int cornerRadius = 25;
             private float fillAlpha = 120 / 255.0f;
             private Color fillColor = new Color(102, 102, 102);
-            private float borderAlpha = 200 / 255.0f;
-            private Color borderColor = new Color(150, 150, 150);
-            private int borderThickness = 1;
+            // private float borderAlpha = 200 / 255.0f;
+            // private Color borderColor = new Color(150, 150, 150);
+            // private int borderThickness = 1;
 
             @Override
             protected void paintComponent(Graphics g) {
@@ -396,13 +394,13 @@ public class ChatRoom extends JPanel {
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fillAlpha));
                 g2d.setColor(fillColor);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), cornerRadius, cornerRadius);
-                if (borderThickness > 0) {
-                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
-                    g2d.setColor(borderColor);
-                    g2d.setStroke(new BasicStroke(borderThickness));
-                    int B = borderThickness;
-                    g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
-                }
+                // if (borderThickness > 0) {
+                //     g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, borderAlpha));
+                //     g2d.setColor(borderColor);
+                //     g2d.setStroke(new BasicStroke(borderThickness));
+                //     int B = borderThickness;
+                //     g2d.drawRoundRect(B/2, B/2, getWidth() - B, getHeight() - B, cornerRadius - B, cornerRadius - B);
+                // }
                 g2d.dispose();
             }
         };
