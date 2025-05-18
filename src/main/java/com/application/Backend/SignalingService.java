@@ -20,7 +20,7 @@ public class SignalingService {
     private String currentUserNameForSignaling; // To send in join messages
     private String currentRoomForSignaling;
 
-    private static final String SIGNALING_SERVER_URL = "ws://localhost:8080/signaling"; // Match your Spring Boot server
+    private static final String SIGNALING_SERVER_URL = "wss://anochat-webrtc-signaling.onrender.com/signaling";
 
     public SignalingService(NetworkListener networkListener) {
         this.networkListener = networkListener;

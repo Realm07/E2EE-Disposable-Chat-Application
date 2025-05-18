@@ -669,9 +669,8 @@ public class ChatController implements NetworkListener {
         // offerOptions.offerToReceiveAudio = false;
         // offerOptions.offerToReceiveVideo = false;
         System.out.println("[P2P] Creating SDP Offer for " + peerUserName + "...");
-        System.out.println("[P2P] Creating SDP Offer for " + peerUserName + "...");
         dev.onvoid.webrtc.RTCOfferOptions offerOptions = new dev.onvoid.webrtc.RTCOfferOptions();
-        peerConnection.createOffer(offerOptions, new CreateSessionDescriptionObserver() {
+        peerConnection.createOffer(offerOptions, new CreateSessionDescriptionObserver() { // Pass the non-null options
             @Override
             public void onSuccess(RTCSessionDescription sdpOffer) {
                 System.out.println("[P2P CreateOffer] SDP Offer created successfully for " + peerUserName);
@@ -765,10 +764,20 @@ public class ChatController implements NetworkListener {
             public void onSuccess() {
                 System.out.println("[P2P SetRemote(Offer)] Remote SDP Offer set successfully from " + fromPeerUserName);
                 System.out.println("[P2P] Creating SDP Answer for " + fromPeerUserName + "...");
-                newPeerConnection.createAnswer(null, new CreateSessionDescriptionObserver() {
+                dev.onvoid.webrtc.RTCAnswerOptions answerOptions = new dev.onvoid.webrtc.RTCAnswerOptions();
+                newPeerConnection.createAnswer(answerOptions, new CreateSessionDescriptionObserver() { // Pass the non-null options
                     @Override
                     public void onSuccess(RTCSessionDescription sdpAnswer) {
                         System.out.println("[P2P CreateAnswer] SDP Answer created successfully for " + fromPeerUserName);
+                        // Log a snippet of the SDP for debugging
+                        if (sdpAnswer != null && sdpAnswer.sdp != null) {
+                            System.out.println("[P2P CreateAnswer SDP Snippet]: " + sdpAnswer.sdp.substring(0, Math.min(sdpAnswer.sdp.length(),100))+"...");
+                        } else {
+                            System.err.println("[P2P CreateAnswer] SDP Answer or its description is null!");
+                            onError("P2P CreateAnswer SDP Null for " + fromPeerUserName, new NullPointerException("SDP Answer was null"));
+                            closeP2PConnectionWithPeer(fromPeerUserName);
+                            return;
+                        }
                         newPeerConnection.setLocalDescription(sdpAnswer, new SetSessionDescriptionObserver() {
                             @Override
                             public void onSuccess() {
@@ -778,15 +787,15 @@ public class ChatController implements NetworkListener {
                             @Override
                             public void onFailure(String error) {
                                 System.err.println("[P2P SetLocal(Answer)] Failed for " + fromPeerUserName + ": " + error);
-                                onError("P2P SetLocalAnswer Error", new RuntimeException(error));
-                                closeP2PConnectionWithPeer(fromPeerUserName); // Use the actual peer ID
+                                onError("P2P SetLocalAnswer Error for " + fromPeerUserName, new RuntimeException(error));
+                                closeP2PConnectionWithPeer(fromPeerUserName);
                             }
                         });
                     }
                     @Override
                     public void onFailure(String error) {
                         System.err.println("[P2P CreateAnswer] Failed for " + fromPeerUserName + ": " + error);
-                        onError("P2P CreateAnswer Error", new RuntimeException(error));
+                        onError("P2P CreateAnswer Error for " + fromPeerUserName, new RuntimeException(error));
                         closeP2PConnectionWithPeer(fromPeerUserName);
                     }
                 });
