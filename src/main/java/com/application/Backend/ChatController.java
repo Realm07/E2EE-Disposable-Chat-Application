@@ -300,26 +300,41 @@ public class ChatController implements NetworkListener {
             System.out.println("[Controller] Signal: Type='" + sigMessage.getType() + "', From='" + fromUser + "', To='" + sigMessage.getToUser() + "' in room '" + sigMessage.getRoom() + "'");
             try {
                 switch (sigMessage.getType().toLowerCase()) {
-                    case "peers": // Received from signaling server after I joined a room
+                    case "peers":
                         if (sigMessage.getPayload() != null) {
                             ClientSignalingMessage.RoomPeersPayload peersPayload = objectMapper.convertValue(sigMessage.getPayload(), ClientSignalingMessage.RoomPeersPayload.class);
                             if (peersPayload != null && peersPayload.getUsers() != null) {
                                 peersPayload.getUsers().forEach(peerUserName -> {
-                                    if (!Objects.equals(peerUserName, this.currentUsername)) {
-                                        initiateP2PConnectionAndOffer(peerUserName);
+                                    if (!Objects.equals(peerUserName, this.currentUsername) &&
+                                            !peerConnections.containsKey(peerUserName)) { // Only connect if not already trying
+                                        // Rule: Initiator is the one with the lexicographically smaller username.
+                                        if (this.currentUsername.compareTo(peerUserName) < 0) {
+                                            System.out.println("[P2P Strategy] I ("+this.currentUsername+") will offer to " + peerUserName);
+                                            initiateP2PConnectionAndOffer(peerUserName);
+                                        } else {
+                                            System.out.println("[P2P Strategy] I ("+this.currentUsername+") will wait for offer from " + peerUserName);
+                                        }
                                     }
                                 });
                             }
                         }
                         break;
-                    case "user_joined": // Another user joined the room
+
+                    case "user_joined":
                         if (sigMessage.getPayload() != null) {
                             ClientSignalingMessage.UserEventPayload userEvent = objectMapper.convertValue(sigMessage.getPayload(), ClientSignalingMessage.UserEventPayload.class);
                             String newPeerUserName = userEvent.getUser();
-                            if (newPeerUserName != null && !Objects.equals(newPeerUserName, this.currentUsername)) {
+                            if (newPeerUserName != null && !Objects.equals(newPeerUserName, this.currentUsername) &&
+                                    !peerConnections.containsKey(newPeerUserName)) { // Only connect if not already trying
                                 System.out.println("[Controller] User '" + newPeerUserName + "' joined (signaled).");
                                 if (chatRoomUI != null) chatRoomUI.addUserToList(newPeerUserName);
-                                initiateP2PConnectionAndOffer(newPeerUserName); // Existing client makes offer to new joiner
+                                // Rule: Initiator is the one with the lexicographically smaller username.
+                                if (this.currentUsername.compareTo(newPeerUserName) < 0) {
+                                    System.out.println("[P2P Strategy] New user " + newPeerUserName + ". I ("+this.currentUsername+") will offer.");
+                                    initiateP2PConnectionAndOffer(newPeerUserName);
+                                } else {
+                                    System.out.println("[P2P Strategy] New user " + newPeerUserName + ". I ("+this.currentUsername+") will wait for their offer.");
+                                }
                             }
                         }
                         break;
@@ -690,49 +705,71 @@ public class ChatController implements NetworkListener {
 
     private void handleReceivedOffer(String fromPeerUserName, String sdpOfferString) {
         System.out.println("[P2P] Handling received SDP OFFER from: " + fromPeerUserName);
-        if (peerConnectionFactory == null) {
-            System.err.println("[P2P] PeerConnectionFactory is NULL! Cannot handle OFFER from " + fromPeerUserName);
-            onError("WebRTC Init Error", new IllegalStateException("PeerConnectionFactory not initialized."));
-            return;
-        }
-        // TODO: Handle glare - if already in process of connecting to this peer from our side.
-        if (peerConnections.containsKey(fromPeerUserName)) {
-            System.err.println("[P2P] Received OFFER from " + fromPeerUserName + ", but a connection already exists...");
-            // For now, we might ignore if we already initiated, or decide on a "politeness" strategy.
-            // If we initiated and are waiting for an answer, we might ignore this incoming offer.
-            // For simplicity here, we'll proceed, which might lead to issues if not handled carefully.
-            // A robust solution checks signaling state or has a flag for who is "offering".
+        if (peerConnectionFactory == null) { /* ... */ return; }
+
+        RTCPeerConnection existingPc = peerConnections.get(fromPeerUserName);
+        if (existingPc != null) {
+            // We have an existing connection attempt with this peer. This is glare.
+            // Rule: Only the peer with the lexicographically smaller username initiates an offer.
+            boolean iShouldOffer = this.currentUsername.compareTo(fromPeerUserName) < 0;
+
+            if (iShouldOffer) {
+                // I am the designated offerer. If I receive an offer from them, they are "impolite"
+                // or a race condition occurred.
+                // If my PC is already in HAVE_LOCAL_OFFER, it means I've sent my offer.
+                // I should probably ignore their offer and wait for their answer to my offer.
+                RTCSignalingState currentState = existingPc.getSignalingState();
+                if (currentState == RTCSignalingState.HAVE_LOCAL_OFFER) {
+                    System.err.println("[P2P GLARE] Received OFFER from " + fromPeerUserName +
+                            ", but I (" + this.currentUsername + ") am the designated offerer and already sent an offer (state: " + currentState + "). Ignoring their offer.");
+                    return; // Ignore their offer, wait for their answer to my offer
+                } else {
+                    // My PC state is not HAVE_LOCAL_OFFER (e.g., STABLE, or something went wrong with my offer).
+                    // This is unexpected if I'm the designated offerer.
+                    // Let's be "polite" here: close my attempt and process their offer.
+                    System.err.println("[P2P GLARE] Received OFFER from " + fromPeerUserName +
+                            ", I am designated offerer but my PC state is " + currentState +
+                            ". Cleaning up my attempt and processing theirs.");
+                    closeP2PConnectionWithPeer(fromPeerUserName); // Clean up my existing attempt fully
+                    // Fall through to process their offer by creating a new PC below
+                }
+            } else {
+                // I am the designated answerer (my username is larger). Receiving an offer is expected.
+                // However, if an existingPC is present, it implies a previous, possibly failed or duplicate, attempt.
+                // Clean it up before processing the new offer to ensure a fresh state.
+                System.out.println("[P2P] Received OFFER from " + fromPeerUserName +
+                        " (I am answerer). An existing PC was found; cleaning it up before processing new offer.");
+                closeP2PConnectionWithPeer(fromPeerUserName);
+                // Fall through to process their offer by creating a new PC below
+            }
         }
 
+        // Proceed to create a NEW PC to handle this incoming offer (as the designated answerer, or after cleaning up my polite offer)
         RTCConfiguration rtcConfig = new RTCConfiguration();
         rtcConfig.iceServers.addAll(ICE_SERVERS);
         SimplePeerConnectionObserver pcObserver = new SimplePeerConnectionObserver(fromPeerUserName, this);
-
-        RTCPeerConnection peerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, pcObserver);
-        if (peerConnection == null) {
+        RTCPeerConnection newPeerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, pcObserver);
+        if (newPeerConnection == null) {
             System.err.println("[P2P] Failed to create RTCPeerConnection for incoming OFFER from " + fromPeerUserName);
             onError("P2P Creation Error", new RuntimeException("Failed to create PeerConnection for " + fromPeerUserName));
             return;
         }
-        peerConnections.put(fromPeerUserName, peerConnection); // Store before setRemoteDescription
-        pcObserver.setPeerConnection(peerConnection);
+        peerConnections.put(fromPeerUserName, newPeerConnection); // Store before setRemoteDescription
+        pcObserver.setPeerConnection(newPeerConnection);
         System.out.println("[P2P] RTCPeerConnection created for incoming OFFER from " + fromPeerUserName);
 
         RTCSessionDescription remoteSdpOffer = new RTCSessionDescription(RTCSdpType.OFFER, sdpOfferString);
         System.out.println("[P2P] Setting Remote Description (Offer) from " + fromPeerUserName + "...");
-        peerConnection.setRemoteDescription(remoteSdpOffer, new SetSessionDescriptionObserver() {
+        newPeerConnection.setRemoteDescription(remoteSdpOffer, new SetSessionDescriptionObserver() {
             @Override
             public void onSuccess() {
                 System.out.println("[P2P SetRemote(Offer)] Remote SDP Offer set successfully from " + fromPeerUserName);
-                dev.onvoid.webrtc.RTCAnswerOptions answerOptions = new dev.onvoid.webrtc.RTCAnswerOptions();
                 System.out.println("[P2P] Creating SDP Answer for " + fromPeerUserName + "...");
-                peerConnection.createAnswer(answerOptions, new CreateSessionDescriptionObserver() {
+                newPeerConnection.createAnswer(null, new CreateSessionDescriptionObserver() {
                     @Override
                     public void onSuccess(RTCSessionDescription sdpAnswer) {
                         System.out.println("[P2P CreateAnswer] SDP Answer created successfully for " + fromPeerUserName);
-                        System.out.println("[P2P CreateAnswer] Answer SDP: " + sdpAnswer.sdp.substring(0, Math.min(sdpAnswer.sdp.length(),60))+"...");
-
-                        peerConnection.setLocalDescription(sdpAnswer, new SetSessionDescriptionObserver() {
+                        newPeerConnection.setLocalDescription(sdpAnswer, new SetSessionDescriptionObserver() {
                             @Override
                             public void onSuccess() {
                                 System.out.println("[P2P SetLocal(Answer)] Local SDP Answer set successfully for " + fromPeerUserName);
@@ -741,15 +778,15 @@ public class ChatController implements NetworkListener {
                             @Override
                             public void onFailure(String error) {
                                 System.err.println("[P2P SetLocal(Answer)] Failed for " + fromPeerUserName + ": " + error);
-                                onError("P2P SetLocalAnswer Error for " + fromPeerUserName, new RuntimeException(error));
-                                closeP2PConnectionWithPeer(fromPeerUserName);
+                                onError("P2P SetLocalAnswer Error", new RuntimeException(error));
+                                closeP2PConnectionWithPeer(fromPeerUserName); // Use the actual peer ID
                             }
                         });
                     }
                     @Override
                     public void onFailure(String error) {
                         System.err.println("[P2P CreateAnswer] Failed for " + fromPeerUserName + ": " + error);
-                        onError("P2P CreateAnswer Error for " + fromPeerUserName, new RuntimeException(error));
+                        onError("P2P CreateAnswer Error", new RuntimeException(error));
                         closeP2PConnectionWithPeer(fromPeerUserName);
                     }
                 });
@@ -757,13 +794,11 @@ public class ChatController implements NetworkListener {
             @Override
             public void onFailure(String error) {
                 System.err.println("[P2P SetRemote(Offer)] Failed for " + fromPeerUserName + ": " + error);
-                onError("P2P SetRemoteOffer Error for " + fromPeerUserName, new RuntimeException(error));
+                onError("P2P SetRemoteOffer Error", new RuntimeException(error));
                 closeP2PConnectionWithPeer(fromPeerUserName);
             }
         });
-        if (chatRoomUI != null) {
-            SwingUtilities.invokeLater(() -> chatRoomUI.addUserToList(fromPeerUserName)); // Tentative UI add
-        }
+        if (chatRoomUI != null) { SwingUtilities.invokeLater(() -> chatRoomUI.addUserToList(fromPeerUserName)); }
     }
 
     private void handleReceivedAnswer(String fromPeerUserName, String sdpAnswerString) {
