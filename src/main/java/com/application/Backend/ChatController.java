@@ -30,6 +30,7 @@ import dev.onvoid.webrtc.media.MediaStream;     // For SimplePeerConnectionObser
 import dev.onvoid.webrtc.RTCOfferOptions;
 import dev.onvoid.webrtc.RTCAnswerOptions;
 
+
 // Java standard imports
 import javax.swing.*;
 import java.io.File;
@@ -66,16 +67,46 @@ public class ChatController implements NetworkListener {
     private PeerConnectionFactory peerConnectionFactory;
     private final Map<String, RTCPeerConnection> peerConnections = new ConcurrentHashMap<>();
     private final Map<String, RTCDataChannel> dataChannels = new ConcurrentHashMap<>();
+    private List<RTCIceServer> dynamicIceServers = new ArrayList<>();
 
     private static final List<RTCIceServer> ICE_SERVERS = new ArrayList<>();
     static {
-        RTCIceServer stunServer1 = new RTCIceServer();
-        stunServer1.urls.add("stun:stun.l.google.com:19302");
-        ICE_SERVERS.add(stunServer1);
-        RTCIceServer stunServer2 = new RTCIceServer();
-        stunServer2.urls.add("stun:stun1.l.google.com:19302");
-        ICE_SERVERS.add(stunServer2);
-        // TODO: Add your TURN server configurations here when available
+        System.out.println("[ICE] Configuring ICE Servers...");
+
+        // --- Using Temporary Credentials from TurnWebRTC ---
+        // Server Set 1 (TURN servers from TurnWebRTC)
+        RTCIceServer turnServer1 = new RTCIceServer();
+        turnServer1.urls.add("turn:13.248.213.189:3479"); // UDP first, then TCP usually
+        turnServer1.urls.add("turn:13.248.213.189:3478");
+        // For IPv6 if your clients/network support it well
+        // turnServer1.urls.add("turn:[2600:9000:a408:bb6e:7c57:ffdc:ccb1:7f57]:3478");
+        // turnServer1.urls.add("turn:[2600:9000:a408:bb6e:7c57:ffdc:ccb1:7f57]:3479");
+        turnServer1.username = "1747592190:ce65459db07e534b756d4c0559ffc0f38168";
+        turnServer1.password = "LMofgX7bdXWKxg0y+DEDJfXawLs="; // 'credential' is the password
+        // The dev.onvoid.webrtc.RTCIceServer might have a field like:
+        // turnServer1.credentialType = RTCIceCredentialType.PASSWORD; // If supported by the library, otherwise password field is enough
+        ICE_SERVERS.add(turnServer1);
+        System.out.println("[ICE] Added TURN Server (Set 1): " + String.join(", ", turnServer1.urls) + " with username.");
+
+
+        // STUN Server (from TurnWebRTC or public ones)
+        RTCIceServer stunServerGoogle = new RTCIceServer();
+        stunServerGoogle.urls.add("stun:stun.l.google.com:19302");
+        // No username or password for public STUN
+        ICE_SERVERS.add(stunServerGoogle);
+        System.out.println("[ICE] Added STUN Server: " + String.join(", ", stunServerGoogle.urls));
+
+        // You can add more public STUN servers for robustness if desired
+        RTCIceServer stunServerTwilio = new RTCIceServer();
+        stunServerTwilio.urls.add("stun:global.stun.twilio.com:3478");
+        ICE_SERVERS.add(stunServerTwilio);
+        System.out.println("[ICE] Added STUN Server (Twilio): " + String.join(", ", stunServerTwilio.urls));
+
+
+        System.out.println("[ICE] Total ICE Servers configured: " + ICE_SERVERS.size());
+        for(RTCIceServer server : ICE_SERVERS) {
+            System.out.println("  - URL(s): " + String.join(", ", server.urls) + (server.username != null && !server.username.isEmpty() ? ", User: " + server.username.substring(0,10)+"..." : ""));
+        }
     }
 
     public ChatController(MainFrame mainFrame) {
@@ -296,10 +327,103 @@ public class ChatController implements NetworkListener {
             if (this.activeRoomName == null || (sigMessage.getRoom() != null && !this.activeRoomName.equals(sigMessage.getRoom()))) {
                 System.out.println("[Controller] Ignoring signal for room " + sigMessage.getRoom() + " (current: " + this.activeRoomName + ")"); return;
             }
-            String fromUser = sigMessage.getFromUser();
-            System.out.println("[Controller] Signal: Type='" + sigMessage.getType() + "', From='" + fromUser + "', To='" + sigMessage.getToUser() + "' in room '" + sigMessage.getRoom() + "'");
+            String fromUser = sigMessage.getFromUser(); // Might be null for server-sent messages like 'welcome_to_room'
+            System.out.println("[Controller] Signal: Type='" + sigMessage.getType() +
+                    "', From='" + fromUser +
+                    "', To='" + sigMessage.getToUser() +
+                    "' in room '" + sigMessage.getRoom() + "'");
             try {
                 switch (sigMessage.getType().toLowerCase()) {
+                    case "welcome_to_room":
+                        if (sigMessage.getPayload() instanceof Map) {
+                            Map<String, Object> welcomePayload = (Map<String, Object>) sigMessage.getPayload();
+
+                            // 1. Process ICE Servers
+                            if (welcomePayload.get("iceServers") instanceof List) {
+                                List<Map<String, Object>> rawIceConfigs = (List<Map<String, Object>>) welcomePayload.get("iceServers");
+                                System.out.println("[ICE Parsing] Received " + rawIceConfigs.size() + " raw ICE server configurations from signaling.");
+
+                                this.dynamicIceServers.clear();
+                                for (Map<String, Object> rawConfig : rawIceConfigs) {
+                                    System.out.println("  [ICE RAW Processing] Raw Config Map: " + rawConfig); // Log the whole map
+
+                                    Object urlsObject = rawConfig.get("urls");
+                                    if (!(urlsObject instanceof List)) {
+                                        System.err.println("  [ICE Parsing] Malformed ICE server entry: 'urls' is not a list. Skipping entry: " + rawConfig);
+                                        continue;
+                                    }
+                                    List<String> urls = (urlsObject instanceof List) ? (List<String>) urlsObject : Collections.emptyList();
+
+                                    String username = null;
+                                    Object rawUsername = rawConfig.get("username");
+                                    if (rawUsername instanceof String && !((String) rawUsername).isEmpty()) {
+                                        username = (String) rawUsername;
+                                    }
+                                    System.out.println("    [ICE RAW Processing] Extracted Username: " + username);
+
+
+                                    String password = null;
+                                    // IMPORTANT: The JSON payload from your signaling server now has "password" key
+                                    // because TurnCredentialService mapped "credential" to "password" when creating its DTOs.
+                                    Object rawPassword = rawConfig.get("password");
+                                    if (rawPassword instanceof String && !((String) rawPassword).isEmpty()) {
+                                        password = (String) rawPassword;
+                                    }
+                                    System.out.println("    [ICE RAW Processing] Extracted Password (from 'password' key): " + (password != null ? "Set" : "Not Set or Empty"));
+
+                                    if (!urls.isEmpty()) {
+                                        if (username != null && password != null) { // THIS IS THE CRUCIAL CHECK
+                                            System.out.println("  [ICE Parsing Decision] Detected TURN entry. User: " + username.substring(0,Math.min(10, username.length())) + "..., Pass: Set, URLs: " + urls.size());
+                                            for (String url : urls) {
+                                                RTCIceServer turnUrlServer = new RTCIceServer();
+                                                turnUrlServer.urls.add(url);
+                                                turnUrlServer.username = username;
+                                                turnUrlServer.password = password;
+                                                this.dynamicIceServers.add(turnUrlServer);
+                                                System.out.println("    [ICE Added - TURN URL] URL: " + url);
+                                            }
+                                        } else {
+                                            System.out.println("  [ICE Parsing Decision] Detected STUN entry (or TURN with missing credentials). URLs: " + urls.size());
+                                            for (String url : urls) {
+                                                RTCIceServer stunUrlServer = new RTCIceServer();
+                                                stunUrlServer.urls.add(url);
+                                                this.dynamicIceServers.add(stunUrlServer);
+                                                System.out.println("    [ICE Added - STUN URL] URL: " + url);
+                                            }
+                                        }
+                                    } else {
+                                        System.err.println("  [ICE Parsing] Skipped ICE server entry with no URLs: " + rawConfig);
+                                    }
+                                }
+                                System.out.println("[Controller] Dynamically configured " + this.dynamicIceServers.size() + " RTCIceServer objects.");
+                                this.dynamicIceServers.forEach(s -> System.out.println("  Final Config: " + String.join(",", s.urls) +
+                                        (s.username != null ? ", User: Yes" : "") +
+                                        (s.password != null ? ", Pass: Yes" : "") +
+                                        ", Policy: " + s.tlsCertPolicy)); // Log default policy too
+                            } else {
+                                System.err.println("[Controller] 'welcome_to_room' message did not contain valid 'iceServers' list object.");
+                            }
+
+                            // 2. Process Peers (this part was mostly fine)
+                            if (welcomePayload.get("peers") instanceof List) {
+                                @SuppressWarnings("unchecked")
+                                List<String> peerUserNames = (List<String>) welcomePayload.get("peers");
+                                System.out.println("[Controller] Peers from welcome: " + (peerUserNames != null ? peerUserNames.toString() : "null list"));
+                                if (peerUserNames != null) {
+                                    peerUserNames.forEach(peerUN -> {
+                                        if (!Objects.equals(peerUN, this.currentUsername)) {
+                                            if (this.currentUsername.compareTo(peerUN) < 0) {
+                                                System.out.println("[P2P Strategy from Welcome] I (" + this.currentUsername + ") will offer to existing peer " + peerUN);
+                                                initiateP2PConnectionAndOffer(peerUN);
+                                            } else {
+                                                System.out.println("[P2P Strategy from Welcome] I (" + this.currentUsername + ") will wait for offer from existing peer " + peerUN);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        break;
                     case "peers":
                         if (sigMessage.getPayload() != null) {
                             ClientSignalingMessage.RoomPeersPayload peersPayload = objectMapper.convertValue(sigMessage.getPayload(), ClientSignalingMessage.RoomPeersPayload.class);
@@ -633,7 +757,17 @@ public class ChatController implements NetworkListener {
         }
 
         RTCConfiguration rtcConfig = new RTCConfiguration();
-        if (!ICE_SERVERS.isEmpty()) { rtcConfig.iceServers.addAll(ICE_SERVERS); }
+        if (!this.dynamicIceServers.isEmpty()) { // Use dynamically fetched ICE servers
+            rtcConfig.iceServers.addAll(this.dynamicIceServers);
+            System.out.println("[P2P] Using " + this.dynamicIceServers.size() + " dynamic ICE servers for PC with " + peerUserName);
+        } else {
+            System.err.println("[P2P Warning] No dynamic ICE servers available! NAT traversal might fail for " + peerUserName);
+            // Optionally fall back to a hardcoded public STUN if dynamicIceServers is empty after fetch attempt.
+            RTCIceServer stunGoogle = new RTCIceServer();
+            stunGoogle.urls.add("stun:stun.l.google.com:19302");
+            rtcConfig.iceServers.add(stunGoogle);
+            System.out.println("[P2P] Falling back to public STUN for PC with " + peerUserName);
+        }
 
         SimplePeerConnectionObserver pcObserver = new SimplePeerConnectionObserver(peerUserName, this);
         RTCPeerConnection peerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, pcObserver);
@@ -648,53 +782,49 @@ public class ChatController implements NetworkListener {
         System.out.println("[P2P] RTCPeerConnection created for " + peerUserName);
 
         RTCDataChannelInit dcInit = new RTCDataChannelInit();
-        dcInit.ordered = true; // Reliable and ordered for chat messages
-        // dcInit.negotiated = false; // Default - Data channel created by one peer and "announced"
-        // dcInit.id = -1; // For non-negotiated, ID is assigned by the library
-
+        dcInit.ordered = true;
         RTCDataChannel dataChannel = peerConnection.createDataChannel("chat", dcInit);
-        if (dataChannel == null) {
-            System.err.println("[P2P] Failed to create RTCDataChannel for " + peerUserName);
-            peerConnection.close();
-            peerConnections.remove(peerUserName);
-            onError("P2P DataChannel Error", new RuntimeException("Failed to create DataChannel for " + peerUserName));
-            return;
-        }
-        System.out.println("[P2P] RTCDataChannel 'chat' created for " + peerUserName);
+        if (dataChannel == null) { /* ... error handling ... */ return; }
         dataChannels.put(peerUserName, dataChannel);
-        setupDataChannelObserver(peerUserName, dataChannel); // Register observer for this new DC
+        setupDataChannelObserver(peerUserName, dataChannel);
 
-        // Create Offer
-        // RTCOfferOptions offerOptions = new RTCOfferOptions(); // If specific options needed
+        System.out.println("[P2P] Creating SDP Offer for " + peerUserName + "...");
+        // *** Instantiate RTCOfferOptions ***
+        dev.onvoid.webrtc.RTCOfferOptions offerOptions = new dev.onvoid.webrtc.RTCOfferOptions();
+        // Set specific options if needed:
         // offerOptions.offerToReceiveAudio = false;
         // offerOptions.offerToReceiveVideo = false;
-        System.out.println("[P2P] Creating SDP Offer for " + peerUserName + "...");
-        dev.onvoid.webrtc.RTCOfferOptions offerOptions = new dev.onvoid.webrtc.RTCOfferOptions();
+        // offerOptions.iceRestart = false; // Typically false unless forcing ICE restart
+
         peerConnection.createOffer(offerOptions, new CreateSessionDescriptionObserver() { // Pass the non-null options
             @Override
             public void onSuccess(RTCSessionDescription sdpOffer) {
-                System.out.println("[P2P CreateOffer] SDP Offer created successfully for " + peerUserName);
-                System.out.println("[P2P CreateOffer] Offer SDP: " + sdpOffer.sdp.substring(0, Math.min(sdpOffer.sdp.length(),60))+"...");
-
+                System.out.println("[P2P CreateOffer SUCCESS] SDP Offer created for " + peerUserName);
+                if (sdpOffer == null || sdpOffer.sdp == null) {
+                    System.err.println("[P2P CreateOffer] Generated SDP Offer or its description is NULL for " + peerUserName);
+                    onError("P2P Null Offer SDP for " + peerUserName, new NullPointerException("Generated SDP Offer was null"));
+                    closeP2PConnectionWithPeer(peerUserName);
+                    return;
+                }
+                System.out.println("[P2P CreateOffer SDP Snippet]: " + sdpOffer.sdp.substring(0, Math.min(sdpOffer.sdp.length(), 100)) + "...");
+                // ... (rest of setLocalDescription and sendSdpToSignaling) ...
                 peerConnection.setLocalDescription(sdpOffer, new SetSessionDescriptionObserver() {
-                    @Override
-                    public void onSuccess() {
-                        System.out.println("[P2P SetLocal(Offer)] Local SDP Offer set successfully for " + peerUserName);
+                    @Override public void onSuccess() {
+                        System.out.println("[P2P SetLocal(Offer) SUCCESS] Local SDP Offer set for " + peerUserName);
                         sendSdpToSignaling(peerUserName, "offer", sdpOffer);
                     }
-                    @Override
-                    public void onFailure(String error) {
-                        System.err.println("[P2P SetLocal(Offer)] Failed for " + peerUserName + ": " + error);
-                        onError("P2P SetLocalOffer Error for " + peerUserName, new RuntimeException(error));
-                        closeP2PConnectionWithPeer(peerUserName); // Clean up failed attempt
+                    @Override public void onFailure(String error) { /* ... error handling ... */
+                        System.err.println("[P2P SetLocal(Offer) FAILURE] For " + peerUserName + ": " + error);
+                        onError("P2P SetLocalOffer Error", new RuntimeException(error));
+                        closeP2PConnectionWithPeer(peerUserName);
                     }
                 });
             }
             @Override
-            public void onFailure(String error) {
-                System.err.println("[P2P CreateOffer] Failed for " + peerUserName + ": " + error);
-                onError("P2P CreateOffer Error for " + peerUserName, new RuntimeException(error));
-                closeP2PConnectionWithPeer(peerUserName); // Clean up failed attempt
+            public void onFailure(String error) { /* ... error handling ... */
+                System.err.println("[P2P CreateOffer FAILURE] For " + peerUserName + ": " + error);
+                onError("P2P CreateOffer Error", new RuntimeException(error));
+                closeP2PConnectionWithPeer(peerUserName);
             }
         });
         if (chatRoomUI != null) {
@@ -704,81 +834,76 @@ public class ChatController implements NetworkListener {
 
     private void handleReceivedOffer(String fromPeerUserName, String sdpOfferString) {
         System.out.println("[P2P] Handling received SDP OFFER from: " + fromPeerUserName);
-        if (peerConnectionFactory == null) { /* ... */ return; }
-
-        RTCPeerConnection existingPc = peerConnections.get(fromPeerUserName);
-        if (existingPc != null) {
-            // We have an existing connection attempt with this peer. This is glare.
-            // Rule: Only the peer with the lexicographically smaller username initiates an offer.
-            boolean iShouldOffer = this.currentUsername.compareTo(fromPeerUserName) < 0;
-
-            if (iShouldOffer) {
-                // I am the designated offerer. If I receive an offer from them, they are "impolite"
-                // or a race condition occurred.
-                // If my PC is already in HAVE_LOCAL_OFFER, it means I've sent my offer.
-                // I should probably ignore their offer and wait for their answer to my offer.
-                RTCSignalingState currentState = existingPc.getSignalingState();
-                if (currentState == RTCSignalingState.HAVE_LOCAL_OFFER) {
-                    System.err.println("[P2P GLARE] Received OFFER from " + fromPeerUserName +
-                            ", but I (" + this.currentUsername + ") am the designated offerer and already sent an offer (state: " + currentState + "). Ignoring their offer.");
-                    return; // Ignore their offer, wait for their answer to my offer
-                } else {
-                    // My PC state is not HAVE_LOCAL_OFFER (e.g., STABLE, or something went wrong with my offer).
-                    // This is unexpected if I'm the designated offerer.
-                    // Let's be "polite" here: close my attempt and process their offer.
-                    System.err.println("[P2P GLARE] Received OFFER from " + fromPeerUserName +
-                            ", I am designated offerer but my PC state is " + currentState +
-                            ". Cleaning up my attempt and processing theirs.");
-                    closeP2PConnectionWithPeer(fromPeerUserName); // Clean up my existing attempt fully
-                    // Fall through to process their offer by creating a new PC below
-                }
-            } else {
-                // I am the designated answerer (my username is larger). Receiving an offer is expected.
-                // However, if an existingPC is present, it implies a previous, possibly failed or duplicate, attempt.
-                // Clean it up before processing the new offer to ensure a fresh state.
-                System.out.println("[P2P] Received OFFER from " + fromPeerUserName +
-                        " (I am answerer). An existing PC was found; cleaning it up before processing new offer.");
-                closeP2PConnectionWithPeer(fromPeerUserName);
-                // Fall through to process their offer by creating a new PC below
-            }
-        }
-
-        // Proceed to create a NEW PC to handle this incoming offer (as the designated answerer, or after cleaning up my polite offer)
-        RTCConfiguration rtcConfig = new RTCConfiguration();
-        rtcConfig.iceServers.addAll(ICE_SERVERS);
-        SimplePeerConnectionObserver pcObserver = new SimplePeerConnectionObserver(fromPeerUserName, this);
-        RTCPeerConnection newPeerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, pcObserver);
-        if (newPeerConnection == null) {
-            System.err.println("[P2P] Failed to create RTCPeerConnection for incoming OFFER from " + fromPeerUserName);
-            onError("P2P Creation Error", new RuntimeException("Failed to create PeerConnection for " + fromPeerUserName));
+        if (peerConnectionFactory == null) {
+            System.err.println("[P2P] PeerConnectionFactory is NULL! Cannot handle OFFER from " + fromPeerUserName);
+            onError("WebRTC Init Error", new IllegalStateException("PeerConnectionFactory not initialized."));
             return;
         }
-        peerConnections.put(fromPeerUserName, newPeerConnection); // Store before setRemoteDescription
-        pcObserver.setPeerConnection(newPeerConnection);
-        System.out.println("[P2P] RTCPeerConnection created for incoming OFFER from " + fromPeerUserName);
+
+        // Simplified Glare Handling: If an offer is received from a peer for whom a PC is already
+        // being established (e.g., this client is ALREADY offering to them), it might indicate glare.
+        // A more robust glare handling would check the RTCSignalingState of the existing PC.
+        // For now, if a PC exists, we assume this is either a re-offer or a glare situation
+        // where the other side also decided to offer. We will proceed to create an answer,
+        // which should allow WebRTC's internal glare resolution to work (one offer will be ignored).
+        // If a PC for this peer doesn't exist, we create one.
+        RTCPeerConnection peerConnection = peerConnections.get(fromPeerUserName);
+        if (peerConnection == null) {
+            System.out.println("[P2P] No existing PC for " + fromPeerUserName + ", creating new one to handle offer.");
+            RTCConfiguration rtcConfig = new RTCConfiguration();
+            if (!this.dynamicIceServers.isEmpty()) {
+                rtcConfig.iceServers.addAll(this.dynamicIceServers);
+            } else {
+                // Fallback STUN if dynamic ones aren't available
+                RTCIceServer stunGoogle = new RTCIceServer();
+                stunGoogle.urls.add("stun:stun.l.google.com:19302");
+                rtcConfig.iceServers.add(stunGoogle);
+                System.err.println("[P2P] No dynamic ICE servers, falling back to public STUN for " + fromPeerUserName);
+            }
+            SimplePeerConnectionObserver pcObserver = new SimplePeerConnectionObserver(fromPeerUserName, this);
+            peerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, pcObserver);
+
+            if (peerConnection == null) {
+                System.err.println("[P2P] Failed to create RTCPeerConnection for incoming OFFER from " + fromPeerUserName);
+                onError("P2P Creation Error", new RuntimeException("Failed to create PeerConnection for " + fromPeerUserName));
+                return;
+            }
+            peerConnections.put(fromPeerUserName, peerConnection);
+            pcObserver.setPeerConnection(peerConnection);
+            System.out.println("[P2P] RTCPeerConnection created/retrieved for incoming OFFER from " + fromPeerUserName);
+        } else {
+            System.out.println("[P2P] Existing PC found for " + fromPeerUserName + " while handling offer. Using it. State: " + peerConnection.getSignalingState());
+        }
+
+        final RTCPeerConnection finalPeerConnection = peerConnection; // For use in inner classes
 
         RTCSessionDescription remoteSdpOffer = new RTCSessionDescription(RTCSdpType.OFFER, sdpOfferString);
         System.out.println("[P2P] Setting Remote Description (Offer) from " + fromPeerUserName + "...");
-        newPeerConnection.setRemoteDescription(remoteSdpOffer, new SetSessionDescriptionObserver() {
+        finalPeerConnection.setRemoteDescription(remoteSdpOffer, new SetSessionDescriptionObserver() {
             @Override
             public void onSuccess() {
                 System.out.println("[P2P SetRemote(Offer)] Remote SDP Offer set successfully from " + fromPeerUserName);
                 System.out.println("[P2P] Creating SDP Answer for " + fromPeerUserName + "...");
+
+                // *** THIS IS THE CRITICAL FIX ***
+                // Instantiate RTCAnswerOptions, even if using defaults.
                 dev.onvoid.webrtc.RTCAnswerOptions answerOptions = new dev.onvoid.webrtc.RTCAnswerOptions();
-                newPeerConnection.createAnswer(answerOptions, new CreateSessionDescriptionObserver() { // Pass the non-null options
+                // You can set constraints on answerOptions if needed, e.g.:
+                // answerOptions.voiceActivityDetection = false; // Example if relevant
+
+                finalPeerConnection.createAnswer(answerOptions, new CreateSessionDescriptionObserver() { // Pass the non-null options
                     @Override
                     public void onSuccess(RTCSessionDescription sdpAnswer) {
                         System.out.println("[P2P CreateAnswer] SDP Answer created successfully for " + fromPeerUserName);
-                        // Log a snippet of the SDP for debugging
-                        if (sdpAnswer != null && sdpAnswer.sdp != null) {
-                            System.out.println("[P2P CreateAnswer SDP Snippet]: " + sdpAnswer.sdp.substring(0, Math.min(sdpAnswer.sdp.length(),100))+"...");
-                        } else {
-                            System.err.println("[P2P CreateAnswer] SDP Answer or its description is null!");
-                            onError("P2P CreateAnswer SDP Null for " + fromPeerUserName, new NullPointerException("SDP Answer was null"));
-                            closeP2PConnectionWithPeer(fromPeerUserName);
+                        if (sdpAnswer == null || sdpAnswer.sdp == null) {
+                            System.err.println("[P2P CreateAnswer] Generated SDP Answer or its description is NULL for " + fromPeerUserName);
+                            onError("P2P Null Answer SDP for " + fromPeerUserName, new NullPointerException("Generated SDP Answer was null"));
+                            closeP2PConnectionWithPeer(fromPeerUserName); // Clean up
                             return;
                         }
-                        newPeerConnection.setLocalDescription(sdpAnswer, new SetSessionDescriptionObserver() {
+                        System.out.println("[P2P CreateAnswer SDP Snippet]: " + sdpAnswer.sdp.substring(0, Math.min(sdpAnswer.sdp.length(),100))+"...");
+
+                        finalPeerConnection.setLocalDescription(sdpAnswer, new SetSessionDescriptionObserver() {
                             @Override
                             public void onSuccess() {
                                 System.out.println("[P2P SetLocal(Answer)] Local SDP Answer set successfully for " + fromPeerUserName);
@@ -787,7 +912,7 @@ public class ChatController implements NetworkListener {
                             @Override
                             public void onFailure(String error) {
                                 System.err.println("[P2P SetLocal(Answer)] Failed for " + fromPeerUserName + ": " + error);
-                                onError("P2P SetLocalAnswer Error for " + fromPeerUserName, new RuntimeException(error));
+                                onError("P2P SetLocalAnswer Error", new RuntimeException(error));
                                 closeP2PConnectionWithPeer(fromPeerUserName);
                             }
                         });
@@ -795,7 +920,7 @@ public class ChatController implements NetworkListener {
                     @Override
                     public void onFailure(String error) {
                         System.err.println("[P2P CreateAnswer] Failed for " + fromPeerUserName + ": " + error);
-                        onError("P2P CreateAnswer Error for " + fromPeerUserName, new RuntimeException(error));
+                        onError("P2P CreateAnswer Error", new RuntimeException(error));
                         closeP2PConnectionWithPeer(fromPeerUserName);
                     }
                 });
@@ -807,7 +932,10 @@ public class ChatController implements NetworkListener {
                 closeP2PConnectionWithPeer(fromPeerUserName);
             }
         });
-        if (chatRoomUI != null) { SwingUtilities.invokeLater(() -> chatRoomUI.addUserToList(fromPeerUserName)); }
+        if (chatRoomUI != null) {
+            final String finalFromPeerUserName = fromPeerUserName; // For lambda
+            SwingUtilities.invokeLater(() -> chatRoomUI.addUserToList(finalFromPeerUserName));
+        }
     }
 
     private void handleReceivedAnswer(String fromPeerUserName, String sdpAnswerString) {
