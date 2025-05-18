@@ -21,6 +21,7 @@ public class MainFrame extends JFrame {
     private CardLayout cardLayout;
     private JPanel mainViewPanel;
 
+    private String currentUserAvatarPath = null;
 
     private static final String LOGIN_PAGE_CARD = "LoginPage";
     private static final String CHAT_ROOM_CARD = "ChatRoom";
@@ -214,12 +215,28 @@ public class MainFrame extends JFrame {
 
     public void applyChatRoomBackground(String imagePath) {
         if (chatRoom != null) {
-            chatRoom.setBackgroundImage(imagePath); // Assuming setBackgroundImage exists in ChatRoom
+            chatRoom.setBackgroundImage(imagePath); 
         } else {
             System.err.println("[MainFrame] Attempted to set background but ChatRoom instance is null.");
         }
     }
 
+    public void setCurrentUserAvatarPath(String path) {
+        this.currentUserAvatarPath = path;
+        System.out.println("MainFrame: Avatar path set to: " + path);
+
+        // If the chat room is open, tell it to refresh so avatars update
+        if (chatRoom != null) {
+            chatRoom.refreshChatMessages();
+        }
+    }
+
+    public String getSelectedUserAvatarPathForRenderer() {
+        return this.currentUserAvatarPath;
+    }
+
+
+    
     private static void loadCustomFonts() {
         try {
             InputStream regularStream = MainFrame.class.getResourceAsStream("/com/application/FrontEnd/fonts/Sansation_Regular.ttf");

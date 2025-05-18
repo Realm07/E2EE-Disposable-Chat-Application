@@ -41,15 +41,12 @@ public class PublicServerRoom extends JPanel {
     private static final Color HEADER_RIBBON_BACKGROUND = Color.WHITE;
     private static final Color HEADER_RIBBON_BORDER = Color.BLACK;
     private static final Color HEADER_RIBBON_TEXT = Color.BLACK;
-    private static final Color ROW_BORDER_COLOR = Color.BLACK;
     private static final Color ROW_NAME_TEXT_COLOR = Color.BLACK;
     private static final Color ROW_COUNT_TEXT_COLOR = new Color(0, 140, 40); // Darker Green
     private static final Color ROW_BUTTON_TEXT_COLOR = Color.WHITE;
-    private static final Color ROW_BUTTON_BORDER_COLOR = Color.WHITE;
     private static final Color ROW_BUTTON_BACKGROUND_COLOR = new Color(60, 190, 60, 170); // ~66% Alpha Green
     private static final Color FOOTER_TEXT_COLOR = Color.BLACK;
     private static final float ROW_BACKGROUND_ALPHA = 0.66f; // Alpha for row background images
-    private static final int HEADER_BORDER_THICKNESS = 2;
     private static final int ROW_BORDER_THICKNESS = 1; // Thinner border for rows
 
 
@@ -265,7 +262,7 @@ public class PublicServerRoom extends JPanel {
 
         Font nameFont = MainFrame.sansationBold.deriveFont(20f);
         Font countFont = MainFrame.sansationBold.deriveFont(22f);
-        Font buttonFont = MainFrame.sansationBold.deriveFont(16f);
+        // Font buttonFont = MainFrame.sansationBold.deriveFont(16f);
         // Font buttonFont = MainFrame.sansationBold.deriveFont(16f);
 
         JLabel nameLabel = new JLabel(roomDisplayName);
@@ -342,7 +339,7 @@ public class PublicServerRoom extends JPanel {
         private float alpha;
         // Moved constants inside or made them static final in outer class
         private static final Color BORDER_COLOR = Color.BLACK;
-        private static final int BORDER_THICKNESS = 2; // Using the thicker row border
+        // private static final int BORDER_THICKNESS = 2; // Using the thicker row border
 
         public ImageBackgroundRowPanel(String imagePath, float alpha) {
             this.imagePathUsed = imagePath;

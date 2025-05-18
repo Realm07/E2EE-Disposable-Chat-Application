@@ -38,7 +38,15 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>2.0.9</version> <!-- Match implementation version -->
+            <version>2.0.9</version> <!-- Match an implementation version -->
+        </dependency>
+        <!-- Simple Logging Implementation (for console output) -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.9</version> <!-- Match API version -->
+            <!-- Runtime scope: only needed when running, not for compilation -->
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>dev.onvoid.webrtc</groupId>

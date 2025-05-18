@@ -27,6 +27,8 @@ import dev.onvoid.webrtc.RTCIceConnectionState; // For SimplePeerConnectionObser
 import dev.onvoid.webrtc.RTCSignalingState;   // For SimplePeerConnectionObserver
 import dev.onvoid.webrtc.RTCIceGatheringState; // For SimplePeerConnectionObserver
 import dev.onvoid.webrtc.media.MediaStream;     // For SimplePeerConnectionObserver
+import dev.onvoid.webrtc.RTCOfferOptions;
+import dev.onvoid.webrtc.RTCAnswerOptions;
 
 // Java standard imports
 import javax.swing.*;
@@ -532,11 +534,6 @@ public class ChatController implements NetworkListener {
         System.out.println("[Controller] Shutdown cleanup complete.");
     }
 
-
-    // <editor-fold defaultstate="collapsed" desc="WebRTC P2P Connection - TODO sections">
-
-    // TODO: *** You MUST implement these methods using dev.onvoid.webrtc specific APIs ***
-    // TODO: *** You will need to create a class that implements dev.onvoid.webrtc.PeerConnectionObserver ***
     class SimpleDataChannelObserver implements dev.onvoid.webrtc.RTCDataChannelObserver { // CORRECT INTERFACE
         private final String peerId;
         private final ChatController controller;
@@ -621,7 +618,7 @@ public class ChatController implements NetworkListener {
         }
 
         RTCConfiguration rtcConfig = new RTCConfiguration();
-        rtcConfig.iceServers.addAll(ICE_SERVERS); // Global ICE_SERVERS list
+        if (!ICE_SERVERS.isEmpty()) { rtcConfig.iceServers.addAll(ICE_SERVERS); }
 
         SimplePeerConnectionObserver pcObserver = new SimplePeerConnectionObserver(peerUserName, this);
         RTCPeerConnection peerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, pcObserver);
@@ -657,7 +654,9 @@ public class ChatController implements NetworkListener {
         // offerOptions.offerToReceiveAudio = false;
         // offerOptions.offerToReceiveVideo = false;
         System.out.println("[P2P] Creating SDP Offer for " + peerUserName + "...");
-        peerConnection.createOffer(null, new CreateSessionDescriptionObserver() { // null for default options
+        System.out.println("[P2P] Creating SDP Offer for " + peerUserName + "...");
+        dev.onvoid.webrtc.RTCOfferOptions offerOptions = new dev.onvoid.webrtc.RTCOfferOptions();
+        peerConnection.createOffer(offerOptions, new CreateSessionDescriptionObserver() {
             @Override
             public void onSuccess(RTCSessionDescription sdpOffer) {
                 System.out.println("[P2P CreateOffer] SDP Offer created successfully for " + peerUserName);
@@ -725,9 +724,9 @@ public class ChatController implements NetworkListener {
             @Override
             public void onSuccess() {
                 System.out.println("[P2P SetRemote(Offer)] Remote SDP Offer set successfully from " + fromPeerUserName);
-                // RTCAnswerOptions answerOptions = new RTCAnswerOptions();
+                dev.onvoid.webrtc.RTCAnswerOptions answerOptions = new dev.onvoid.webrtc.RTCAnswerOptions();
                 System.out.println("[P2P] Creating SDP Answer for " + fromPeerUserName + "...");
-                peerConnection.createAnswer(null, new CreateSessionDescriptionObserver() { // null for default options
+                peerConnection.createAnswer(answerOptions, new CreateSessionDescriptionObserver() {
                     @Override
                     public void onSuccess(RTCSessionDescription sdpAnswer) {
                         System.out.println("[P2P CreateAnswer] SDP Answer created successfully for " + fromPeerUserName);

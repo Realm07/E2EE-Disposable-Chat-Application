@@ -3,7 +3,6 @@ package com.application.FrontEnd.components; // Or a common dialogs package
 import com.application.FrontEnd.MainFrame; // For fonts
 
 import javax.swing.*;
-import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.MatteBorder;
 import java.awt.*;
