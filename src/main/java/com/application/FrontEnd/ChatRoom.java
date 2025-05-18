@@ -2,7 +2,6 @@ package com.application.FrontEnd;
 
 // Swing & AWT Imports
 import java.awt.AlphaComposite;
-import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -49,7 +48,6 @@ import com.application.Backend.ChatController;
 // Assuming MessageData class/interface exists for file sharing offers
 import com.application.Backend.MessageData; // Placeholder, ensure this exists
 import com.application.FrontEnd.components.CustomButton;
-import com.application.FrontEnd.components.CustomLabel;
 import com.application.FrontEnd.components.CustomTextField;
 import com.application.FrontEnd.components.MessageCellRenderer;
 import com.application.FrontEnd.components.MessageCellRenderer.ChatMessage;
@@ -914,6 +912,7 @@ public class ChatRoom extends JPanel {
 
 
     // --- File Sharing Methods (Backend Integration) ---
+    // In ChatRoom.java
     private void handleShareFileAction() {
         if (concurrentUploads >= MAX_CONCURRENT_UPLOADS) {
             JOptionPane.showMessageDialog(this, "Maximum concurrent uploads reached. Please wait.", "Upload Limit", JOptionPane.WARNING_MESSAGE);
@@ -931,14 +930,18 @@ public class ChatRoom extends JPanel {
         if (result == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
             if (chatController != null) {
-                if (chatController.initiateFileShare(selectedFile, activeRoomName)) {
-                    concurrentUploads++;
-                    lastFileUploadTime = System.currentTimeMillis();
-                    // Display a temporary message or update UI to show upload in progress
-                    displaySystemMessage("Sharing file: " + selectedFile.getName() + "...");
-                } else {
-                    // Controller might have already shown an error (e.g., file too large)
-                }
+                // Increment concurrent uploads and update last upload time BEFORE starting the background thread
+                // If the controller fails early, fileShareAttemptFinished will be called quickly.
+                concurrentUploads++;
+                lastFileUploadTime = System.currentTimeMillis();
+                displaySystemMessage("Preparing to share '" + selectedFile.getName() + "'..."); // Local UI feedback
+
+                // Call initiateFileShare (which returns void) in a background thread
+                new Thread(() -> {
+                    // The controller's initiateFileShare will handle its own internal logic,
+                    // and will call chatRoomUI.fileShareAttemptFinished() in its finally block.
+                    chatController.initiateFileShare(this.activeRoomName, this.currentUserName, selectedFile);
+                }).start();
             }
         }
     }
@@ -962,7 +965,7 @@ public class ChatRoom extends JPanel {
                     "File: " + offerData.originalFilename + // Direct field access
                             " (" + formatFileSize(offerData.originalFileSize) + " bytes). Click to download (not implemented).", // Direct field access
                     "FILE_OFFER_PLACEHOLDER");
-            // The actual implementation will add a special ChatMessage that the renderer can handle
+            // The actual implementation will add a special ChatMessage that the renderer can han
             // to make it clickable and show a download icon.
         });
     }

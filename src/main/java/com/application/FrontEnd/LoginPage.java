@@ -2,7 +2,7 @@ package com.application.FrontEnd;
 
 // Backend/Component Imports
 import com.application.Backend.ChatController;
-import com.application.FrontEnd.components.CustomTextField; 
+import com.application.FrontEnd.components.CustomTextField;
 import com.application.FrontEnd.components.CustomButton; 
 // Standard Java Swing and AWT imports
 import javax.swing.*;

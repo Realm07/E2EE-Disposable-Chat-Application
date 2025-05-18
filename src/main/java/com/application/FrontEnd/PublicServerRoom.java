@@ -1,6 +1,7 @@
 // src/main/java/com/application/FrontEnd/PublicServerRoom.java
 package com.application.FrontEnd;
 
+import com.application.Backend.ChatController;
 import com.application.FrontEnd.components.*;
 
 // Core Swing & AWT Imports
@@ -13,8 +14,6 @@ import java.awt.GridBagConstraints;
 import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.net.URL;
-
-import com.application.Backend.ChatController;
 
 public class PublicServerRoom extends JPanel {
 
