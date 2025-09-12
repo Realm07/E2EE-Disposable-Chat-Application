@@ -26,28 +26,30 @@ public class PublicServerRoom extends JPanel {
     // Resource Paths (Ensure these files exist in src/main/resources/com/application/FrontEnd/images/)
     private static final String PAGE_BACKGROUND_PATH = "/com/application/FrontEnd/images/BG_PublicRooms.png";
     private static final String ICON_BACK_PATH = "/com/application/FrontEnd/images/ICON_Back.png";
-    private static final String IMAGE_PATH_PREFIX = "/com/application/FrontEnd/images/";
+    // private static final String IMAGE_PATH_PREFIX = "/com/application/FrontEnd/images/"; // <-- REMOVED (No longer needed)
 
     // Room Data (Fixed list as requested)
     private static final String[] ROOM_IDS = {"Alpha", "Bravo", "Charlie", "Delta", "Echo"};
     private static final String[] ROOM_DISPLAY_NAMES = {"Room Alpha", "Room Bravo", "Room Charlie", "Room Delta", "Room Echo"};
     private static final int[] ROOM_USER_COUNTS = {5, 7, 15, 2, 9};
-    private static final String[] ROOM_BG_IMAGE_FILES = {
-            "BG_Alpha.jpg", "BG_Bravo.jpg", "BG_Charlie.jpg", "BG_Delta.jpg", "BG_Echo.jpg"
-    };
+    // <-- REMOVED the ROOM_BG_IMAGE_FILES array as we are not using individual images anymore
+    // private static final String[] ROOM_BG_IMAGE_FILES = {
+    //        "BG_Alpha.jpg", "BG_Bravo.jpg", "BG_Charlie.jpg", "BG_Delta.jpg", "BG_Echo.jpg"
+    // };
 
     // Styling Constants
-    private static final Color PANEL_BACKGROUND_FALLBACK = new Color(217, 222, 227); // Fallback if BG image fails
-    private static final Color HEADER_RIBBON_BACKGROUND = Color.WHITE;
-    private static final Color HEADER_RIBBON_BORDER = Color.BLACK;
-    private static final Color HEADER_RIBBON_TEXT = Color.BLACK;
-    private static final Color ROW_NAME_TEXT_COLOR = Color.BLACK;
-    private static final Color ROW_COUNT_TEXT_COLOR = new Color(0, 140, 40); // Darker Green
-    private static final Color ROW_BUTTON_TEXT_COLOR = Color.WHITE;
-    private static final Color ROW_BUTTON_BACKGROUND_COLOR = new Color(60, 190, 60, 170); // ~66% Alpha Green
-    private static final Color FOOTER_TEXT_COLOR = Color.BLACK;
-    private static final float ROW_BACKGROUND_ALPHA = 0.66f; // Alpha for row background images
-    private static final int ROW_BORDER_THICKNESS = 1; // Thinner border for rows
+    private static final Color PAGE_BACKGROUND_FALLBACK = new Color(30, 32, 34); // Very Dark Grey (almost black)
+    private static final Color HEADER_RIBBON_BACKGROUND = new Color(44, 47, 51); // Darker Grey for panels
+    private static final Color HEADER_RIBBON_TEXT = Color.LIGHT_GRAY;            // Muted text for headers
+    private static final Color ROW_PANEL_BACKGROUND = new Color(44, 47, 51);     // Same as header
+    private static final Color ROW_NAME_TEXT_COLOR = Color.WHITE;                // Bright white for primary text
+    private static final Color ROW_COUNT_TEXT_COLOR = new Color(185, 187, 190);    // Lighter grey for secondary data
+    private static final Color FOOTER_TEXT_COLOR = Color.GRAY;
+
+    // Accent Color for Buttons and Highlights
+    private static final Color ACCENT_COLOR = new Color(88, 101, 242);             // A nice, vibrant "Discord" blue/purple
+    private static final Color ACCENT_COLOR_HOVER = new Color(110, 122, 245);      // A slightly lighter version for hover
+    private static final Color BUTTON_TEXT_COLOR = Color.WHITE;
 
 
     // --- UI Component Fields ---
@@ -145,44 +147,33 @@ public class PublicServerRoom extends JPanel {
     private JPanel createCenterPanel() {
         JPanel centerPanel = new JPanel();
         centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
-        centerPanel.setOpaque(false); // Keep this transparent
+        centerPanel.setOpaque(false);
 
         JPanel headerRow = createHeaderRibbon();
-        // headerRow.setAlignmentX(Component.CENTER_ALIGNMENT); // REMOVED this line
-
         centerPanel.add(headerRow);
 
         JPanel roomListPanel = new JPanel();
         roomListPanel.setLayout(new BoxLayout(roomListPanel, BoxLayout.Y_AXIS));
-        // roomListPanel.setAlignmentX(Component.CENTER_ALIGNMENT); // REMOVED this line
         roomListPanel.setOpaque(false);
-        // Internal padding for room list items
         roomListPanel.setBorder(BorderFactory.createEmptyBorder(20, 0, 20, 0)); // Padding top/bottom only
 
         // Fixed list of rooms
         for (int i = 0; i < ROOM_IDS.length; i++) {
-            String imagePath = IMAGE_PATH_PREFIX + ROOM_BG_IMAGE_FILES[i];
+            // <-- MODIFIED: Call to createRoomRow no longer needs an image path
             JPanel row = createRoomRow(
                     ROOM_DISPLAY_NAMES[i],
                     ROOM_USER_COUNTS[i],
-                    ROOM_IDS[i],
-                    imagePath
+                    ROOM_IDS[i]
             );
-            // Add the row directly
             roomListPanel.add(row);
             if (i < ROOM_IDS.length - 1) {
                 roomListPanel.add(Box.createRigidArea(new Dimension(0, 15)));
             }
         }
 
-        // Keep vertical glue if you want content pushed towards the top within centerPanel
-        // centerPanel.add(Box.createVerticalGlue());
         centerPanel.add(roomListPanel);
-        // centerPanel.add(Box.createVerticalGlue());
 
-        // Ensure the centerPanel doesn't stretch horizontally beyond its preferred content width
-        // This helps FlowLayout center it correctly. Its width is governed by TARGET_CONTENT_WIDTH.
-        centerPanel.setMaximumSize(new Dimension(TARGET_CONTENT_WIDTH + 10, Short.MAX_VALUE)); // Limit max width
+        centerPanel.setMaximumSize(new Dimension(TARGET_CONTENT_WIDTH + 10, Short.MAX_VALUE));
 
 
         return centerPanel;
@@ -191,129 +182,148 @@ public class PublicServerRoom extends JPanel {
     private int TARGET_CONTENT_WIDTH = 1000;
 
     private JPanel createHeaderRibbon() {
-        final int ribbonHeight = 60;
-        final int borderThickness = 2;
+    final int ribbonHeight = 60;
 
-        JPanel headerPanel = new JPanel(new GridBagLayout()) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g); // Let L&F paint background (set below)
-                Graphics2D g2d = (Graphics2D) g.create();
-                g2d.setColor(HEADER_RIBBON_BORDER);
-                g2d.setStroke(new BasicStroke(borderThickness));
-
-                int w = getWidth();
-                int h = getHeight();
-                int halfStroke = borderThickness / 2;
-
-                // Top border
-                g2d.drawLine(0, halfStroke, w, halfStroke);
-                // Bottom border
-                g2d.drawLine(0, h - 1 - halfStroke, w, h - 1 - halfStroke);
-
-
-                // Left border
-                g2d.drawLine(halfStroke, 0, halfStroke, h);
-                // Right border
-                g2d.drawLine(w - 1 - halfStroke, 0, w - 1 - halfStroke, h);
-
-
-                g2d.dispose();
-            }
-            @Override public Dimension getPreferredSize() { int prefContentWidth = super.getPreferredSize().width; return new Dimension(Math.max(TARGET_CONTENT_WIDTH, prefContentWidth), ribbonHeight); }
-            @Override public Dimension getMinimumSize() { return new Dimension(400, ribbonHeight);}
-            @Override public Dimension getMaximumSize() { return new Dimension(Short.MAX_VALUE, ribbonHeight + 5); }
-        };
-        headerPanel.setOpaque(true);
-        headerPanel.setBackground(HEADER_RIBBON_BACKGROUND);
+    // Custom panel with rounded corners
+    JPanel headerPanel = new JPanel(new GridBagLayout()) {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g.create();
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            // Use our new panel background color
+            g2d.setColor(HEADER_RIBBON_BACKGROUND);
+            // Draw a rounded rectangle instead of a sharp one
+            g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15);
+            g2d.dispose();
+        }
+        @Override public Dimension getPreferredSize() { return new Dimension(TARGET_CONTENT_WIDTH, ribbonHeight); }
+        @Override public Dimension getMinimumSize() { return new Dimension(400, ribbonHeight);}
+        @Override public Dimension getMaximumSize() { return new Dimension(Short.MAX_VALUE, ribbonHeight + 5); }
+    };
+        headerPanel.setOpaque(false); // We are custom painting, so it must be non-opaque
         headerPanel.setBorder(BorderFactory.createEmptyBorder(5, 20, 5, 20));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridy = 0; gbc.anchor = GridBagConstraints.CENTER; gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(0, 15, 0, 15);
 
-        Font headerFont = MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(20f) : new Font("SansSerif", Font.BOLD, 20); // Larger
-        Color headerColor = HEADER_RIBBON_TEXT;
+        Font headerFont = MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(Font.PLAIN, 18f) : new Font("SansSerif", Font.PLAIN, 18);
+        Color headerColor = HEADER_RIBBON_TEXT; // Use our new muted header text color
 
         JLabel nameHeader = new JLabel("Room Name");
-        nameHeader.setFont(headerFont); nameHeader.setForeground(headerColor); nameHeader.setHorizontalAlignment(SwingConstants.CENTER);
-        gbc.gridx = 0; gbc.weightx = 0.45; headerPanel.add(nameHeader, gbc);
+        nameHeader.setFont(headerFont); nameHeader.setForeground(headerColor);
+        gbc.gridx = 0; gbc.weightx = 0.45; gbc.anchor = GridBagConstraints.LINE_START; headerPanel.add(nameHeader, gbc);
 
         JLabel usersHeader = new JLabel("Connected Users");
         usersHeader.setFont(headerFont); usersHeader.setForeground(headerColor); usersHeader.setHorizontalAlignment(SwingConstants.CENTER);
-        gbc.gridx = 1; gbc.weightx = 0.25; headerPanel.add(usersHeader, gbc);
+        gbc.gridx = 1; gbc.weightx = 0.25; gbc.anchor = GridBagConstraints.CENTER; headerPanel.add(usersHeader, gbc);
 
         JLabel joinHeader = new JLabel("Enter Room");
         joinHeader.setFont(headerFont); joinHeader.setForeground(headerColor); joinHeader.setHorizontalAlignment(SwingConstants.CENTER);
-        gbc.gridx = 2; gbc.weightx = 0.30; headerPanel.add(joinHeader, gbc);
+        gbc.gridx = 2; gbc.weightx = 0.30; gbc.anchor = GridBagConstraints.CENTER; headerPanel.add(joinHeader, gbc);
 
         return headerPanel;
     }
 
 
-    private JPanel createRoomRow(String roomDisplayName, int userCount, String roomIdentifier, String imagePath) {
-        ImageBackgroundRowPanel rowPanel = new ImageBackgroundRowPanel(imagePath, ROW_BACKGROUND_ALPHA);
-        rowPanel.setLayout(new GridBagLayout());
-        rowPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+    // <-- MODIFIED: Whole method updated for solid black background
+    private JPanel createRoomRow(String roomDisplayName, int userCount, String roomIdentifier) {
+    // A custom panel with rounded corners for a modern "card" look.
+        JPanel rowPanel = new JPanel(new GridBagLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                // This method allows us to paint a custom background with rounded corners.
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2d.setColor(ROW_PANEL_BACKGROUND); // Use our new dark grey panel color
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 15, 15); // The 15, 15 creates the corner radius
+                g2d.dispose();
+                super.paintComponent(g); // Important: Paint children (labels, button) AFTER the background
+            }
+        };
+        rowPanel.setOpaque(false); // We must do this because we are painting our own background
+        rowPanel.setBorder(BorderFactory.createEmptyBorder(10, 25, 10, 25)); // Increased padding
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridy = 0; gbc.anchor = GridBagConstraints.CENTER; gbc.fill = GridBagConstraints.BOTH;
-        gbc.insets = new Insets(0, 10, 0, 10);
+        gbc.gridy = 0; gbc.fill = GridBagConstraints.BOTH;
+        gbc.insets = new Insets(5, 5, 5, 5); // Internal spacing
 
+        // --- Room Name ---
         Font nameFont = MainFrame.sansationBold.deriveFont(20f);
-        Font countFont = MainFrame.sansationBold.deriveFont(22f);
-        // Font buttonFont = MainFrame.sansationBold.deriveFont(16f);
-        // Font buttonFont = MainFrame.sansationBold.deriveFont(16f);
-
         JLabel nameLabel = new JLabel(roomDisplayName);
-        nameLabel.setFont(nameFont); nameLabel.setForeground(ROW_NAME_TEXT_COLOR);
-        nameLabel.setOpaque(false);
+        nameLabel.setFont(nameFont);
+        nameLabel.setForeground(ROW_NAME_TEXT_COLOR); // Use white for high contrast
         gbc.gridx = 0; gbc.weightx = 0.45; gbc.anchor = GridBagConstraints.LINE_START;
         rowPanel.add(nameLabel, gbc);
 
+        // --- User Count ---
+        Font countFont = MainFrame.sansationBold.deriveFont(Font.BOLD, 22f);
         JLabel userLabel = new JLabel(String.valueOf(userCount));
-        userLabel.setFont(countFont); userLabel.setForeground(ROW_COUNT_TEXT_COLOR);
+        userLabel.setFont(countFont);
+        userLabel.setForeground(ROW_COUNT_TEXT_COLOR); // Use the muted grey for secondary info
         userLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        userLabel.setOpaque(false);
         gbc.gridx = 1; gbc.weightx = 0.25; gbc.anchor = GridBagConstraints.CENTER;
         rowPanel.add(userLabel, gbc);
 
-        CustomButton joinButton = new CustomButton("Join Room", 120, 45, new Color(102, 255, 102, 120));
-        joinButton.setForeground(ROW_BUTTON_TEXT_COLOR);
-        joinButton.setBorder(BorderFactory.createEmptyBorder(8, 25, 8, 25));
+        // --- Join Button with Hover Effect ---
+        JButton joinButton = new JButton("Join Room");
+        joinButton.setFont(MainFrame.sansationBold.deriveFont(16f));
+        joinButton.setForeground(BUTTON_TEXT_COLOR);
+        joinButton.setBackground(ACCENT_COLOR); // Set the initial accent color
+        joinButton.setOpaque(false); // Important for custom painting
+        joinButton.setFocusPainted(false);
+        joinButton.setBorderPainted(false);
+        joinButton.setContentAreaFilled(false);
+        joinButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        // This Mouse Listener handles the hover effect
+        joinButton.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                joinButton.setBackground(ACCENT_COLOR_HOVER); // Change to lighter color on hover
+                joinButton.repaint(); // Tell the button to repaint itself
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                joinButton.setBackground(ACCENT_COLOR); // Change back to original color
+                joinButton.repaint();
+            }
+        });
 
         joinButton.addActionListener(e -> {
             System.out.println("[PublicServerRoom] User '" + currentUsername + "' attempting to join public room: '" + roomIdentifier + "'");
             chatController.joinPublicRoom(currentUsername, roomIdentifier);
         });
-        JPanel buttonContainer = new JPanel(new GridBagLayout()) {
+
+        // We put the button in a container that will paint the background for us.
+        // This gives us perfectly rounded corners on the button itself.
+        JPanel buttonContainer = new JPanel(new BorderLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(ROW_BUTTON_BACKGROUND_COLOR);
+                // The background color is taken from the button itself.
+                g2.setColor(joinButton.getBackground());
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
                 g2.dispose();
-            }
-            @Override
-            public Dimension getPreferredSize() {
-                return joinButton.getPreferredSize();
-            }
-            @Override
-            public Dimension getMinimumSize() {
-                return joinButton.getMinimumSize();
+                super.paintComponent(g);
             }
         };
         buttonContainer.setOpaque(false);
-        buttonContainer.add(joinButton, new GridBagConstraints());
+        buttonContainer.add(joinButton, BorderLayout.CENTER); // Add the button to fill the container
 
         gbc.gridx = 2; gbc.weightx = 0.30;
         gbc.fill = GridBagConstraints.NONE;
         gbc.anchor = GridBagConstraints.CENTER;
+        // Set a fixed size for the button container
+        buttonContainer.setPreferredSize(new Dimension(130, 45));
         rowPanel.add(buttonContainer, gbc);
 
+        // Set row size constraints
         int rowHeight = 85;
-        rowPanel.setPreferredSize(new Dimension(TARGET_CONTENT_WIDTH , rowHeight));
+        rowPanel.setPreferredSize(new Dimension(TARGET_CONTENT_WIDTH, rowHeight));
         rowPanel.setMinimumSize(new Dimension(400, rowHeight - 10));
         rowPanel.setMaximumSize(new Dimension(Short.MAX_VALUE, rowHeight + 10));
 
@@ -325,141 +335,25 @@ public class PublicServerRoom extends JPanel {
         JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         footerPanel.setOpaque(false);
         JLabel versionLabel = new JLabel("v1.0.0");
-        versionLabel.setFont(MainFrame.sansationBold.deriveFont(12f)); // Bold version
-        versionLabel.setForeground(FOOTER_TEXT_COLOR); // Black text
+        versionLabel.setFont(MainFrame.sansationBold.deriveFont(12f));
+        versionLabel.setForeground(FOOTER_TEXT_COLOR);
         footerPanel.add(versionLabel);
         footerPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 8, 15));
         return footerPanel;
     }
 
-
-    private static class ImageBackgroundRowPanel extends JPanel {
-        private Image backgroundImage;
-        private String imagePathUsed;
-        private float alpha;
-        // Moved constants inside or made them static final in outer class
-        private static final Color BORDER_COLOR = Color.BLACK;
-        // private static final int BORDER_THICKNESS = 2; // Using the thicker row border
-
-        public ImageBackgroundRowPanel(String imagePath, float alpha) {
-            this.imagePathUsed = imagePath;
-            this.alpha = Math.max(0.0f, Math.min(1.0f, alpha));
-            try {
-                // Load Image using ImageIO from classpath resource URL
-                URL imgUrl = getClass().getResource(imagePath);
-                if (imgUrl != null) {
-                    this.backgroundImage = ImageIO.read(imgUrl);
-                    if (this.backgroundImage == null) {
-                        // Throw specific error if read fails but URL was found
-                        throw new IOException("ImageIO.read returned null for path: " + imagePath);
-                    }
-                    System.out.println("[RowBGPanel] Loaded: " + imagePath); // Success log
-                } else {
-                    // Throw specific error if resource URL itself wasn't found
-                    throw new IOException("Resource not found at path: " + imagePath);
-                }
-            } catch (IOException e) {
-                // Handle ANY IOException during loading
-                System.err.println("Error loading row background (" + imagePath + "): " + e.getMessage());
-                this.backgroundImage = null; // Ensure image is null on error
-            }
-            setOpaque(false); // IMPORTANT: Panel must be non-opaque for alpha blending and custom painting
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            // Don't call super.paintComponent(g) when opaque is false and painting background
-            Graphics2D g2d = (Graphics2D) g.create();
-            int w = getWidth();
-            int h = getHeight();
-
-            // 1. Optional Base Fill (Keep or adjust as needed)
-            g2d.setColor(new Color(230, 235, 240, 80)); // Light semi-transparent base
-            g2d.fillRect(0, 0, w, h);
-
-            // 2. Draw the background image (center-cropped with alpha to COVER)
-            if (backgroundImage != null) {
-                int imgW = backgroundImage.getWidth(this);
-                int imgH = backgroundImage.getHeight(this);
-
-                if (imgW > 0 && imgH > 0) { // Ensure image dimensions are valid
-                    // Apply alpha composite *before* drawing image
-                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-                    // Use higher quality interpolation hint for scaling
-                    g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-
-                    // --- START REPLACEMENT ---
-                    // Calculate scale factors to fill width and height separately
-                    double scaleX = (double) w / imgW;
-                    double scaleY = (double) h / imgH;
-
-                    // Use the *larger* scale factor to ensure the image covers the entire panel
-                    double scale = Math.max(scaleX, scaleY);
-
-                    // Calculate the new dimensions of the image after scaling
-                    int scaledW = (int) (imgW * scale);
-                    int scaledH = (int) (imgH * scale);
-
-                    // Calculate the top-left position to center the scaled image
-                    // One of these will be <= 0, effectively clipping the image
-                    int drawX = (w - scaledW) / 2;
-                    int drawY = (h - scaledH) / 2;
-
-                    // Draw the image using the calculated position and scaled dimensions
-                    // This will paint the image scaled to cover the panel bounds
-                    g2d.drawImage(backgroundImage, drawX, drawY, scaledW, scaledH, this);
-                    // --- END REPLACEMENT ---
-
-                    // Reset composite to default opaque drawing for subsequent elements (like border)
-                    g2d.setComposite(AlphaComposite.SrcOver);
-                } else {
-                    // Draw fallback if image loaded but has invalid dimensions
-                    drawErrorFallback(g2d, w, h, "Invalid Dims");
-                }
-            } else {
-                // Draw fallback if image failed to load initially
-                drawErrorFallback(g2d, w, h, "Load Failed");
-            }
-
-            // 3. Draw border AFTER background
-            g2d.setColor(BORDER_COLOR);
-            g2d.setStroke(new BasicStroke(PublicServerRoom.ROW_BORDER_THICKNESS));
-            int inset = PublicServerRoom.ROW_BORDER_THICKNESS / 2;
-            g2d.drawRect(inset, inset, w - PublicServerRoom.ROW_BORDER_THICKNESS, h - PublicServerRoom.ROW_BORDER_THICKNESS);
-
-            g2d.dispose(); // Release the graphics copy resources
-        } // End paintComponent in ImageBackgroundRowPanel
-
-        // Helper to draw error state, providing more context
-        private void drawErrorFallback(Graphics2D g2d, int w, int h, String errorType) {
-            g2d.setColor(new Color(210, 210, 210)); // Lighter grey fallback
-            g2d.fillRect(0, 0, w, h);
-            g2d.setColor(Color.RED);
-            g2d.setFont(new Font("SansSerif", Font.BOLD, 12));
-            String errMsg = "BG Err ("+ errorType +"): " + imagePathUsed.substring(imagePathUsed.lastIndexOf('/')+1);
-            FontMetrics fm = g2d.getFontMetrics();
-            // Basic centering of error text
-            g2d.drawString(errMsg, (w-fm.stringWidth(errMsg))/2, (h-fm.getHeight())/2 + fm.getAscent());
-        }
-
-        // Size hints (Keep these to help BoxLayout size the rows)
-        @Override public Dimension getPreferredSize() { return new Dimension(600, 75); }
-        @Override public Dimension getMinimumSize() { return new Dimension(400, 70); }
-        @Override public Dimension getMaximumSize() { return new Dimension(Short.MAX_VALUE, 80); }
-
-    } // End ImageBackgroundRowPanel
+    // <-- REMOVED: The entire ImageBackgroundRowPanel inner class is no longer needed.
 
 
     // --- Inner Class for Overall Page Background ---
     private static class PageBackgroundPanel extends JPanel {
         private Image backgroundImage;
         private String imagePathUsed;
-        private String errorMessage = null; // Store error message
+        private String errorMessage = null;
 
         public PageBackgroundPanel(String imagePath) {
             this.imagePathUsed = imagePath;
             try {
-                // Load Image using ImageIO
                 URL imgUrl = getClass().getResource(imagePath);
                 if (imgUrl != null) {
                     this.backgroundImage = ImageIO.read(imgUrl);
@@ -471,46 +365,40 @@ public class PublicServerRoom extends JPanel {
                     throw new IOException("Page background resource not found: " + imagePath);
                 }
             } catch (IOException e) {
-                this.errorMessage = e.getMessage(); // Store error for painting
+                this.errorMessage = e.getMessage();
                 System.err.println("Error loading page background (" + imagePath + "): " + this.errorMessage);
-                this.backgroundImage = null; // Ensure it's null on error
+                this.backgroundImage = null;
             }
-            // This panel IS the background, so it should be opaque.
             setOpaque(true);
         }
         @Override
         protected void paintComponent(Graphics g) {
-            super.paintComponent(g); // Let default clear the background
+            super.paintComponent(g);
             if (backgroundImage != null) {
                 Graphics2D g2d = (Graphics2D) g.create();
-                // Draw background scaled to COVER the whole panel
                 int w = getWidth(); int h = getHeight();
                 int imgW = backgroundImage.getWidth(this); int imgH = backgroundImage.getHeight(this);
-                if(imgW <= 0 || imgH <= 0) { // Check if image actually loaded dimensions
+                if(imgW <= 0 || imgH <= 0) {
                     g2d.dispose();
-                    drawPageErrorFallback(g, w, h); // Use Graphics 'g' from parameter
+                    drawPageErrorFallback(g, w, h);
                     return;
                 }
 
-                // COVER Scaling Logic (same as before)
                 double imgAspect = (double) imgW / imgH; double panelAspect = (double) w / h;
                 int drawW, drawH, drawX, drawY;
                 if (panelAspect > imgAspect) { drawW = w; drawH = (int)(w / imgAspect); drawX = 0; drawY = (h - drawH) / 2; }
                 else { drawH = h; drawW = (int)(h * imgAspect); drawX = (w - drawW) / 2; drawY = 0; }
 
-                // Use higher quality interpolation
                 g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
                 g2d.drawImage(backgroundImage, drawX, drawY, drawW, drawH, this);
                 g2d.dispose();
             } else {
-                // Draw error fallback directly using 'g'
                 drawPageErrorFallback(g, getWidth(), getHeight());
             }
         }
 
-        // Helper for page background error
         private void drawPageErrorFallback(Graphics g, int w, int h) {
-            g.setColor(PANEL_BACKGROUND_FALLBACK); // Use the defined fallback color
+            g.setColor(PAGE_BACKGROUND_FALLBACK);
             g.fillRect(0, 0, w, h);
             g.setColor(Color.RED);
             g.setFont(new Font("SansSerif", Font.BOLD, 14));
@@ -518,7 +406,7 @@ public class PublicServerRoom extends JPanel {
             FontMetrics fm = g.getFontMetrics();
             g.drawString(text, 20 , h/2 + fm.getAscent() / 2);
         }
-    } // End PageBackgroundPanel
+    }
 
     private JButton createIconButton(String iconPath, String fallbackText, String tooltip) {
         JButton button = new JButton();
@@ -528,7 +416,7 @@ public class PublicServerRoom extends JPanel {
         button.setContentAreaFilled(false);
         button.setOpaque(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        Dimension iconButtonSize = new Dimension(30, 30); // Fixed size for icons
+        Dimension iconButtonSize = new Dimension(30, 30);
         button.setPreferredSize(iconButtonSize);
         button.setMinimumSize(iconButtonSize);
         button.setMaximumSize(iconButtonSize);
@@ -538,7 +426,7 @@ public class PublicServerRoom extends JPanel {
             if (iconUrl != null) {
                 ImageIcon icon = new ImageIcon(iconUrl);
                 if (icon.getIconWidth() > 0) {
-                    Image scaledImage = icon.getImage().getScaledInstance(24, 24, Image.SCALE_SMOOTH); // Scale icon
+                    Image scaledImage = icon.getImage().getScaledInstance(24, 24, Image.SCALE_SMOOTH);
                     button.setIcon(new ImageIcon(scaledImage));
                 } else { throw new IOException("Icon ImageIcon invalid"); }
             } else { throw new IOException("Icon resource not found: " + iconPath); }
@@ -546,8 +434,8 @@ public class PublicServerRoom extends JPanel {
             System.err.println("Warning: Could not load icon " + iconPath + ". Using text fallback. " + ex.getMessage());
             button.setText(fallbackText);
             button.setFont(new Font("SansSerif", Font.BOLD, 20));
-            button.setForeground(Color.BLACK); // Fallback text color
+            button.setForeground(Color.BLACK);
         }
         return button;
     }
-} // End PublicServerRoom class
+}

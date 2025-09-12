@@ -227,7 +227,7 @@ public class MainFrame extends JFrame {
 
         // If the chat room is open, tell it to refresh so avatars update
         if (chatRoom != null) {
-            chatRoom.refreshChatMessages();
+            chatRoom.refreshChatMessages(); 
         }
     }
 

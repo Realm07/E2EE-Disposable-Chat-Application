@@ -12,7 +12,7 @@ import javax.imageio.ImageIO;
 import java.io.IOException;   
 import java.net.URL;        
 import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
+
 import javax.swing.border.Border; // Import Border
 
 
@@ -21,8 +21,8 @@ public class LoginPage extends JPanel {
 
     // --- UI Components ---
     private CustomTextField userNameField;
-    private CustomButton publicRoomButton; 
-    private CustomButton privateRoomButton;
+    private JButton publicRoomButton;
+    private JButton privateRoomButton;
     private JButton infoButton;            
     private JLabel aboutLabel;
     private JLabel versionLabel;
@@ -40,6 +40,10 @@ public class LoginPage extends JPanel {
     private static final String BACKGROUND_IMAGE_PATH = "/com/application/FrontEnd/images/BG_LoginPage.jpg"; // Correct JPG background
     private static final String LOGO_IMAGE_PATH = "/com/application/FrontEnd/images/ICON_Logo.png";
     private static final String INFO_ICON_PATH = "/com/application/FrontEnd/images/ICON_Info.png"; // 'i' icon path
+    private static final Color ACCENT_COLOR = new Color(230, 230, 230);             // A nice, vibrant "Discord" blue/purple
+    private static final Color ACCENT_COLOR_HOVER = new Color(191, 191, 191); 
+    private static final Color BUTTON_TEXT_COLOR = Color.BLACK;
+
 
     // --- Constructor ---
     public LoginPage(MainFrame mainFrame, ChatController chatController) {
@@ -86,27 +90,27 @@ public class LoginPage extends JPanel {
 
     /** Creates and configures the transparent form panel with its components. */
     private void createFormPanel() {
-        formPanel = new JPanel(new GridBagLayout()); // Use GridBagLayout
-        formPanel.setOpaque(false); // Make transparent to see background through it
+        formPanel = new JPanel(new GridBagLayout());
+        formPanel.setOpaque(false);
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridwidth = GridBagConstraints.REMAINDER; // Each main component on a new line
-        gbc.anchor = GridBagConstraints.CENTER;     // Center components horizontally
-        gbc.insets = new Insets(5, 10, 5, 10); // Default padding
+        gbc.gridwidth = GridBagConstraints.REMAINDER;
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.insets = new Insets(5, 10, 5, 10);
 
         // --- Form Components ---
 
         // Logo (Uses helper)
         JLabel logoLabel = createLogoLabel();
-        gbc.gridy = 0; gbc.insets = new Insets(30, 10, 5, 10); // Adjust padding
+        gbc.gridy = 0; gbc.insets = new Insets(30, 10, 5, 10);
         formPanel.add(logoLabel, gbc);
 
         // App Name
         JLabel appNameLabel = new JLabel("A N O C H A T");
         appNameLabel.setForeground(Color.BLACK);
         appNameLabel.setFont(MainFrame.sansationBold.deriveFont(36f));
-        appNameLabel.setBorder(BorderFactory.createMatteBorder(0,0,1,0, Color.BLACK));
-        gbc.gridy = 1; gbc.insets = new Insets(5, 10, 35, 10); // Adjust padding
+        appNameLabel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.BLACK));
+        gbc.gridy = 1; gbc.insets = new Insets(5, 10, 35, 10);
         formPanel.add(appNameLabel, gbc);
 
         // Username Label
@@ -117,47 +121,49 @@ public class LoginPage extends JPanel {
         formPanel.add(labelUserName, gbc);
 
         // Username Text Field (Underline style)
-        userNameField = new CustomTextField(150, 35); // Keep constructor size
+        userNameField = new CustomTextField(150, 35);
         userNameField.setFont(MainFrame.sansationRegular.deriveFont(16f));
-        userNameField.setHorizontalAlignment(SwingConstants.CENTER); // Center text
+        userNameField.setHorizontalAlignment(SwingConstants.CENTER);
         userNameField.setForeground(Color.BLACK);
         userNameField.setCaretColor(Color.BLACK);
         userNameField.setOpaque(false);
-
-        int horizontalPadding = 30; // <<-- Adjust this value to change the line length
-        Border line = BorderFactory.createMatteBorder(0, 0, 1, 0, Color.BLACK); // The 1px bottom line
-        Border padding = BorderFactory.createEmptyBorder(0, horizontalPadding, 0, horizontalPadding); // Left/Right padding
-        // Combine them: the padding is outside, the line is inside the padded area
+        int horizontalPadding = 30;
+        Border line = BorderFactory.createMatteBorder(0, 0, 1, 0, Color.BLACK);
+        Border padding = BorderFactory.createEmptyBorder(0, horizontalPadding, 0, horizontalPadding);
         userNameField.setBorder(BorderFactory.createCompoundBorder(padding, line));
-
-
-        gbc.gridy = 3; gbc.insets = new Insets(0, 10, 30, 10); // Space below field
-        // Allow field to stretch a bit horizontally if needed by GridBagLayout
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 0.1; // Give it slight weight to expand if needed
+        gbc.gridy = 3; gbc.insets = new Insets(0, 10, 30, 10);
+        gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 0.1;
         formPanel.add(userNameField, gbc);
-        gbc.fill = GridBagConstraints.NONE; // Reset fill
-        gbc.weightx = 0.0; // Reset weight
+        gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0.0;
 
-        // Public/Private Room Buttons Panel
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0)); // Center buttons with gap
-        buttonPanel.setOpaque(false); // Transparent panel
+        // --- BUTTONS PANEL (MODIFIED SECTION) ---
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0));
+        buttonPanel.setOpaque(false);
 
-        publicRoomButton = new CustomButton("Public Rooms", 160, 45, new Color(240, 240, 240));
-        publicRoomButton.setForeground(Color.BLACK);
-        publicRoomButton.setFont(MainFrame.sansationBold.deriveFont(14f));
+        // --- 1. Public Room Button Setup ---
+        publicRoomButton = new JButton("Public Room");
+        setupInteractiveButton(publicRoomButton); // Use a helper method for consistency
 
-        privateRoomButton = new CustomButton("Private Room", 160, 45, new Color(90, 120, 180));
-        privateRoomButton.setForeground(Color.WHITE);
-        privateRoomButton.setFont(MainFrame.sansationBold.deriveFont(14f));
+        // Create the container that paints the background
+        JPanel publicButtonContainer = createButtonContainer(publicRoomButton, 160, 45);
 
-        buttonPanel.add(publicRoomButton);
-        buttonPanel.add(privateRoomButton);
-        gbc.gridy = 4; gbc.insets = new Insets(0, 10, 50, 10); // Space below buttons
+        // --- 2. Private Room Button Setup ---
+        // We now use a standard JButton to make it consistent with the public button
+        privateRoomButton = new JButton("Private Room");
+        setupInteractiveButton(privateRoomButton);
+
+        // Create its container
+        JPanel privateButtonContainer = createButtonContainer(privateRoomButton, 160, 45);
+
+        // Add the CONTAINERS to the panel, not the buttons themselves
+        buttonPanel.add(publicButtonContainer);
+        buttonPanel.add(privateButtonContainer);
+        
+        gbc.gridy = 4; gbc.insets = new Insets(0, 10, 50, 10);
         formPanel.add(buttonPanel, gbc);
 
 
-        // About Label (near bottom)
+        // About Label
         aboutLabel = new JLabel("About");
         aboutLabel.setForeground(Color.BLACK);
         aboutLabel.setFont(MainFrame.sansationRegular.deriveFont(14f));
@@ -166,12 +172,61 @@ public class LoginPage extends JPanel {
             @Override public void mouseClicked(MouseEvent e) { mainFrame.switchToInfoPage(); }
         });
         gbc.gridy = 5; gbc.insets = new Insets(10, 10, 10, 10);
-        gbc.weighty = 1.0; // Take up remaining vertical space below
-        gbc.anchor = GridBagConstraints.PAGE_END; // Anchor towards bottom of space
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.PAGE_END;
         formPanel.add(aboutLabel, gbc);
 
-        // Set preferred size for the form panel to guide centering
         formPanel.setPreferredSize(new Dimension(400, 500));
+    }
+
+    /**
+     * A helper method to configure a JButton for our custom painting.
+     * This avoids duplicating code for both buttons.
+     */
+    private void setupInteractiveButton(JButton button) {
+        button.setFont(MainFrame.sansationBold.deriveFont(16f));
+        button.setForeground(BUTTON_TEXT_COLOR);
+        button.setBackground(ACCENT_COLOR); // Set initial background color
+        button.setOpaque(false);
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(ACCENT_COLOR_HOVER);
+                button.repaint(); // This tells the CONTAINER to repaint
+            }
+            @Override
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(ACCENT_COLOR);
+                button.repaint();
+            }
+        });
+    }
+
+    /**
+     * A helper method that creates the JPanel container which paints the button's background.
+     */
+    private JPanel createButtonContainer(JButton button, int width, int height) {
+        JPanel buttonContainer = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                // Crucial Link: Get the color FROM the button
+                g2.setColor(button.getBackground());
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
+                g2.dispose();
+                super.paintComponent(g); // Paint the button text on top
+            }
+        };
+        buttonContainer.setOpaque(false);
+        buttonContainer.setPreferredSize(new Dimension(width, height));
+        buttonContainer.add(button, BorderLayout.CENTER); // Add the actual button to the container
+        return buttonContainer;
     }
 
 
