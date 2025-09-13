@@ -40,9 +40,12 @@ public class LoginPage extends JPanel {
     private static final String BACKGROUND_IMAGE_PATH = "/com/application/FrontEnd/images/BG_LoginPage.jpg"; // Correct JPG background
     private static final String LOGO_IMAGE_PATH = "/com/application/FrontEnd/images/ICON_Logo.png";
     private static final String INFO_ICON_PATH = "/com/application/FrontEnd/images/ICON_Info.png"; // 'i' icon path
-    private static final Color ACCENT_COLOR = new Color(230, 230, 230);             // A nice, vibrant "Discord" blue/purple
-    private static final Color ACCENT_COLOR_HOVER = new Color(191, 191, 191); 
-    private static final Color BUTTON_TEXT_COLOR = Color.BLACK;
+    private static final Color PUBLIC_BUTTON = new Color(230, 230, 230);        // Light Grey
+    private static final Color PUBLIC_BUTTON_HOVER = new Color(191, 191, 191);   // Darker Grey
+    private static final Color PRIVATE_BUTTON = new Color(77, 77, 255);          // Bright Blue
+    private static final Color PRIVATE_BUTTON_HOVER = new Color(26, 26, 255);      // Brighter Blue
+    private static final Color PUBLIC_BUTTON_TEXT_COLOR = Color.BLACK;
+    private static final Color PRIVATE_BUTTON_TEXT_COLOR = Color.WHITE;
 
 
     // --- Constructor ---
@@ -142,7 +145,7 @@ public class LoginPage extends JPanel {
 
         // --- 1. Public Room Button Setup ---
         publicRoomButton = new JButton("Public Room");
-        setupInteractiveButton(publicRoomButton); // Use a helper method for consistency
+        setupInteractiveButton(publicRoomButton, PUBLIC_BUTTON, PUBLIC_BUTTON_HOVER, PUBLIC_BUTTON_TEXT_COLOR); // Use a helper method for consistency
 
         // Create the container that paints the background
         JPanel publicButtonContainer = createButtonContainer(publicRoomButton, 160, 45);
@@ -150,7 +153,7 @@ public class LoginPage extends JPanel {
         // --- 2. Private Room Button Setup ---
         // We now use a standard JButton to make it consistent with the public button
         privateRoomButton = new JButton("Private Room");
-        setupInteractiveButton(privateRoomButton);
+        setupInteractiveButton(privateRoomButton, PRIVATE_BUTTON, PRIVATE_BUTTON_HOVER, PRIVATE_BUTTON_TEXT_COLOR);
 
         // Create its container
         JPanel privateButtonContainer = createButtonContainer(privateRoomButton, 160, 45);
@@ -183,10 +186,10 @@ public class LoginPage extends JPanel {
      * A helper method to configure a JButton for our custom painting.
      * This avoids duplicating code for both buttons.
      */
-    private void setupInteractiveButton(JButton button) {
+    private void setupInteractiveButton(JButton button, Color initialColor, Color hoverColor, Color textColor) {
         button.setFont(MainFrame.sansationBold.deriveFont(16f));
-        button.setForeground(BUTTON_TEXT_COLOR);
-        button.setBackground(ACCENT_COLOR); // Set initial background color
+        button.setForeground(textColor);
+        button.setBackground(initialColor);
         button.setOpaque(false);
         button.setFocusPainted(false);
         button.setBorderPainted(false);
@@ -196,12 +199,12 @@ public class LoginPage extends JPanel {
         button.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
-                button.setBackground(ACCENT_COLOR_HOVER);
-                button.repaint(); // This tells the CONTAINER to repaint
+                button.setBackground(hoverColor);
+                button.repaint();
             }
             @Override
             public void mouseExited(MouseEvent e) {
-                button.setBackground(ACCENT_COLOR);
+                button.setBackground(initialColor);
                 button.repaint();
             }
         });

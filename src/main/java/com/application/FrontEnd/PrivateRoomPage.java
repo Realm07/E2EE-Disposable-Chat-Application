@@ -9,15 +9,14 @@ import javax.imageio.ImageIO; // Needed for static background image
 import java.io.IOException;   // Needed for static background image
 import javax.swing.*;
 import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
 
 public class PrivateRoomPage extends JPanel {
 
     // --- UI Components ---
     private CustomTextField roomNameField;
     private JPasswordField passwordField; // Using JPasswordField is better for passwords
-    private CustomButton createButton;
-    private CustomButton joinButton;
+    private JButton createButton;
+    private JButton joinButton;
     private JButton backButton;
     private JLabel versionLabel;
     private JPanel formPanel; // Panel holding centered form elements
@@ -35,6 +34,14 @@ public class PrivateRoomPage extends JPanel {
     private static final String BACKGROUND_IMAGE_PATH = "/com/application/FrontEnd/images/BG_PublicRooms.png";
     private static final String BACK_ICON_PATH = "/com/application/FrontEnd/images/ICON_Back.png"; // Make sure this exists
     // No logo needed here
+
+    //Color
+    private static final Color CREATE_BUTTON = new Color(230, 230, 230);        // Light Grey
+    private static final Color CREATE_BUTTON_HOVER = new Color(191, 191, 191);   // Darker Grey
+    private static final Color JOIN_BUTTON = new Color(77, 77, 255);          // Bright Blue
+    private static final Color JOIN_BUTTON_HOVER = new Color(26, 26, 255);      // Brighter Blue
+    private static final Color CREATE_BUTTON_TEXT_COLOR = Color.BLACK;
+    private static final Color JOIN_BUTTON_TEXT_COLOR = Color.WHITE;
 
     // --- Constructor ---
     public PrivateRoomPage(MainFrame mainFrame, String userName) {
@@ -158,24 +165,71 @@ public class PrivateRoomPage extends JPanel {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0)); // Center buttons with gap
         buttonPanel.setOpaque(false); // Transparent panel
 
-        // Style buttons like LoginPage (Create = light, Join = blue)
-        createButton = new CustomButton("Create", 150, 45, new Color(240, 240, 240)); // Adjusted text, size, color
-        createButton.setForeground(Color.BLACK);
-        createButton.setFont(MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(14f) : new Font("SansSerif", Font.BOLD, 14));
+        createButton = new JButton("Create");
+        setupInteractiveButton(createButton, CREATE_BUTTON, CREATE_BUTTON_HOVER, CREATE_BUTTON_TEXT_COLOR); // Use a helper method for consistency
 
-        joinButton = new CustomButton("Join", 150, 45, new Color(90, 120, 180)); // Adjusted text, size, color
-        joinButton.setForeground(Color.WHITE);
-        joinButton.setFont(MainFrame.sansationBold != null ? MainFrame.sansationBold.deriveFont(14f) : new Font("SansSerif", Font.BOLD, 14));
+        // Create the container that paints the background
+        JPanel publicButtonContainer = createButtonContainer(createButton, 160, 45);
 
-        buttonPanel.add(createButton);
-        buttonPanel.add(joinButton);
-        gbc.gridy = 5; gbc.insets = new Insets(10, 15, 20, 15); // Space below buttons
-        gbc.anchor = GridBagConstraints.CENTER;
-        gbc.gridwidth = GridBagConstraints.REMAINDER;
+        // --- 2. Private Room Button Setup ---
+        // We now use a standard JButton to make it consistent with the public button
+        joinButton = new JButton("Join");
+        setupInteractiveButton(joinButton, JOIN_BUTTON, JOIN_BUTTON_HOVER, JOIN_BUTTON_TEXT_COLOR);
+
+        // Create its container
+        JPanel privateButtonContainer = createButtonContainer(joinButton, 160, 45);
+
+        buttonPanel.add(publicButtonContainer);
+        buttonPanel.add(privateButtonContainer);
+        
+        gbc.gridy = 5; gbc.insets = new Insets(0, 10, 50, 10);
         formPanel.add(buttonPanel, gbc);
 
         // Set preferred size for the form panel to guide centering
         formPanel.setPreferredSize(new Dimension(400, 450)); // Adjust height as needed
+    }
+
+    private void setupInteractiveButton(JButton button, Color initialColor, Color hoverColor, Color textColor) {
+        button.setFont(MainFrame.sansationBold.deriveFont(16f));
+        button.setForeground(textColor);
+        button.setBackground(initialColor);
+        button.setOpaque(false);
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(hoverColor);
+                button.repaint();
+            }
+            @Override
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(initialColor);
+                button.repaint();
+            }
+        });
+    }
+
+    private JPanel createButtonContainer(JButton button, int width, int height) {
+        JPanel buttonContainer = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                // Crucial Link: Get the color FROM the button
+                g2.setColor(button.getBackground());
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
+                g2.dispose();
+                super.paintComponent(g); // Paint the button text on top
+            }
+        };
+        buttonContainer.setOpaque(false);
+        buttonContainer.setPreferredSize(new Dimension(width, height));
+        buttonContainer.add(button, BorderLayout.CENTER); // Add the actual button to the container
+        return buttonContainer;
     }
 
     /** Helper to create icon buttons (Copied from LoginPage) */
